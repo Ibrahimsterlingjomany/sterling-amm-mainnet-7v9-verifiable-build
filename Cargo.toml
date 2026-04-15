@@ -1,0 +1,15 @@
+[workspace]
+members = ["programs/*"]
+resolver = "2"
+
+[patch.crates-io]
+constant_time_eq = { path = "vendor/constant_time_eq-0.4.2" }
+blake3 = { path = "vendor/blake3-1.8.3" }
+
+[profile.release]
+overflow-checks = true
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+opt-level = "z"
+strip = "symbols"

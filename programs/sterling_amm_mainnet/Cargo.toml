@@ -1,0 +1,19 @@
+[package]
+name = "sterling_amm_mainnet"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+solana-program = "=1.14.17"
+anchor-lang = { version = "0.26.0", features = ["init-if-needed"] }
+anchor-spl = "0.26.0"
+borsh = "0.9.3"
+borsh-derive = "0.9.3"
+num_enum = "0.5.11"
+indexmap = "1.9.3"
+
+[features]
+no-entrypoint = []

@@ -1,0 +1,10 @@
+[features]
+resolution = true
+skip-lint = false
+
+[programs.mainnet]
+sterling_amm_mainnet = "7v9sLrk92NNLLUfXLJw3o7MycZNvwsTK6kLWfWb8vcVA"
+
+[provider]
+cluster = "Mainnet"
+wallet = "~/.config/solana/id.json"

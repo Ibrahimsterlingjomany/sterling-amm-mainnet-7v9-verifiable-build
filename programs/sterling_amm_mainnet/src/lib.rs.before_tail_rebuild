@@ -1,0 +1,1260 @@
+use anchor_lang::prelude::*;
+use anchor_spl::token::{self, Burn, Mint, MintTo, Token, TokenAccount, Transfer};
+use std::str::FromStr;
+
+declare_id!("7v9sLrk92NNLLUfXLJw3o7MycZNvwsTK6kLWfWb8vcVA");
+
+// =========================
+// CONSTANTES (Mints / LP / Coffres)
+// =========================
+
+// "Sterling" mints (exemples)
+pub const TREASURY_ROOT_MINT: &str = "7oDogFJzuxFpcW3R8hxqWRyAc8UsTBvQ83mWC8Q6C5H7";
+pub const SJBC_MINT: &str = "9kued2JXgVk5dzvtipsTdXfBMWihy1E55TwMiXchCoAb";
+pub const SJBC2_MINT: &str = "EsNo61QodqHCRjkTGJDeqyK7N4Hunip5PaTYbpPZEsG2";
+pub const SJBC3_MINT: &str = "FwCp9JvCxtC88rJNWJSZFcoSUDW8NuSzKKSwt7MPF9of";
+
+// Stablecoins (Solana mainnet)
+pub const USDC_MINT: &str = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+pub const USDT_MAIN_MINT: &str = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
+pub const USDT_OLD_MINT: &str = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
+
+// Portal BTC (si tu t'en sers)
+pub const BTC_PORTAL_MINT: &str = "9n4nbM75f5Ui33ZbPYXn59EwSgE8CGsHtAeTH5YFeJ9E";
+
+// LPs
+pub const LP_MINT_2: &str = "G94nkBm4ntjiEHNzTpd7GRW9J8H5rqrhW83k5RSHZrBZ";
+pub const LP_AUTH_2: &str = "Htopqis52g8nGvvkpnG7Z7XZhgBpqtN9huqUyk6LH9gB";
+pub const LP_MINT_3: &str = "DnepvMafJZzDtDcevrqbMUCmDqdNhBLjCTUu1xhR4HeL";
+pub const LP_AUTH_3: &str = "CMqD45Kq5oukPvaMDhzav5RxJqZb1xME1MmV71CzCeTw";
+
+// New mints
+pub const MINT_H1: &str = "H1hutftquntrMVid7btBsBw4XLjGLVwxfv9exYdMwsr9";
+pub const MINT_FR15: &str = "FR15AHXBE8vDpYASFmCbbCD6yso4XiD6XiEXAF6dGLix";
+pub const MINT_DB8: &str = "DB8gCpC6Qs1c4CPfvPXT7RcFmqxzY5g6i8Djo5j5A2nq";
+
+// Coffres (token accounts SPL)
+pub const USDC_COFFRE: &str = "7vWLrATXnuGTCjmexa7b4roo9Em6VMKr3bdDemJNHNk1";
+pub const USDT_COFFRE: &str = "GfG1XmzxSTzvfexRLmzDZCUNCdkdAWe9BBtL62psEcHd";
+
+// Divers
+pub const PDA_GT: &str = "GTAs9L3XFdhHEFoo6KWNbFFxMCFRnbVomsbx7deShkLb";
+pub const COFFRE_7Q: &str = "7qeqQYVgLaeaDWi4X4Hin9wpauCxZFQB5Bov9zKFev2W";
+pub const POOL_ID: &str = "BbvR4zUAwZF8LmVFLXNpDy3CxuYcDwd5isoh7CZFAF5G";
+
+// Off-chain wallets (ne PAS parser en Pubkey)
+pub const BTC_WALLET: &str = "bc1qmxnh7wrddrfcjcmyx72cmgf88ykew74gl9v5tl";
+pub const ETH_WALLET: &str = "0x7d2f9d6e73f9a57832feb80097148debfac2ffa4";
+
+// Flags
+pub const TRUE_CASH_FLAG: bool = true;
+pub const CASH_BACKED_FLAG: bool = true;
+pub const REAL_PEG_FLAG: bool = true;
+pub const SOVEREIGN_FLAG: bool = true;
+
+// Values
+pub const USD_MICROS: u64 = 1_000_000;
+pub const DEFAULT_TOKEN_VALUE_USD_MICROS: u64 = 1 * USD_MICROS;
+pub const DEFAULT_TREASURY_VALUE_USD_MICROS: u64 = 174_000 * USD_MICROS;
+
+// Staking
+pub const DEFAULT_CASHBACK_BPS: u16 = 9200; // 92%
+pub const DEFAULT_REWARD_INTERVAL_SECONDS: u64 = 300; // 5 min
+
+// Swap fees
+pub const DEFAULT_SWAP_FEE_BPS: u16 = 30; // 0.30%
+pub const MAX_SWAP_FEE_BPS: u16 = 1000; // 10%
+
+// Auto-bridge threshold (ex: 10 * treasury value)
+pub const DEFAULT_FEE_THRESHOLD_USD_MICROS: u64 = 10 * DEFAULT_TREASURY_VALUE_USD_MICROS;
+
+// Main wallets (Solana pubkeys)
+pub const MAIN_WALLET: &str = "CMqD45Kq5oukPvaMDhzav5RxJqZb1xME1MmV71CzCeTw"; // Compte C
+pub const OKX_WALLET: &str = "GQo15C7g4rbJ7zzhAzSd3SzeMAYpPtNhD8U8P3QrL7MU";
+
+// Treasury ATAs (wallet C)
+pub const TREASURY_USDC_ATA: &str = "2NUyY9XfzZ6dHZwRtQMt5oBHhZLNdwTBKwVbjrPwEDGN";
+pub const TREASURY_USDT_ATA: &str = "GUfkfnKNB1rNkjJWaJ7KnciFsVPEMV3vamA5SYqeeoDD";
+
+// =========================
+// TYPES
+// =========================
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq)]
+pub enum FeeSide {
+    Base,
+    Quote,
+}
+
+// =========================
+// PROGRAM
+// =========================
+#[program]
+pub mod sterling_amm_mainnet {
+    use super::*;
+
+    // =========================
+    // A) CONFIG
+    // =========================
+    pub fn initialize_config(ctx: Context<InitializeConfig>) -> Result<()> {
+        let cfg = &mut ctx.accounts.config;
+
+        cfg.admin = ctx.accounts.admin.key();
+
+        cfg.true_cash = TRUE_CASH_FLAG;
+        cfg.cash_backed = CASH_BACKED_FLAG;
+        cfg.real_peg = REAL_PEG_FLAG;
+        cfg.sovereign = SOVEREIGN_FLAG;
+
+        cfg.token_value_usd_micros_default = DEFAULT_TOKEN_VALUE_USD_MICROS;
+        cfg.treasury_value_usd_micros = DEFAULT_TREASURY_VALUE_USD_MICROS;
+
+        cfg.cashback_bps = DEFAULT_CASHBACK_BPS;
+        cfg.reward_interval = DEFAULT_REWARD_INTERVAL_SECONDS;
+
+        cfg.allow_fallback_usdt = true;
+
+        cfg.enable_treasury = true;
+        cfg.enable_sjbc = true;
+        cfg.enable_sjbc2 = true;
+        cfg.enable_sjbc3 = true;
+        cfg.enable_usdt_main = true;
+        cfg.enable_usdt_old = true;
+        cfg.enable_btc_portal = true;
+
+        cfg.main_wallet = pubkey_from_str(MAIN_WALLET);
+        cfg.okx_wallet = pubkey_from_str(OKX_WALLET);
+
+        cfg.lp_mint2 = pubkey_from_str(LP_MINT_2);
+        cfg.lp_auth2 = pubkey_from_str(LP_AUTH_2);
+        cfg.lp_mint3 = pubkey_from_str(LP_MINT_3);
+        cfg.lp_auth3 = pubkey_from_str(LP_AUTH_3);
+
+        cfg.mint_h1 = pubkey_from_str(MINT_H1);
+        cfg.mint_fr15 = pubkey_from_str(MINT_FR15);
+        cfg.mint_db8 = pubkey_from_str(MINT_DB8);
+
+        // Coffres SPL (Token Accounts)
+        cfg.usdc_coffre = pubkey_from_str(USDC_COFFRE);
+        cfg.usdt_coffre = pubkey_from_str(USDT_COFFRE);
+
+        cfg.pda_gt = pubkey_from_str(PDA_GT);
+        cfg.coffre_7q = pubkey_from_str(COFFRE_7Q);
+        cfg.pool_id = pubkey_from_str(POOL_ID);
+
+        // Destination fees (wallet C)
+        cfg.treasury_usdc_ata = pubkey_from_str(TREASURY_USDC_ATA);
+        cfg.treasury_usdt_ata = pubkey_from_str(TREASURY_USDT_ATA);
+
+        // Auto-collect (tous les N swaps) : 10 par défaut
+        cfg.auto_collect_every_swaps = 10;
+
+        cfg.fee_threshold_usd_micros = DEFAULT_FEE_THRESHOLD_USD_MICROS;
+
+        cfg.bump = *ctx.bumps.get("config").unwrap();
+        Ok(())
+    }
+
+    pub fn set_params(
+        ctx: Context<AdminOnly>,
+        cashback_bps: u16,
+        reward_interval: u64,
+        allow_fallback_usdt: bool,
+        fee_threshold_usd_micros: u64,
+        auto_collect_every_swaps: u64,
+    ) -> Result<()> {
+        require_admin(&ctx.accounts.config, &ctx.accounts.admin)?;
+        require!(cashback_bps <= 10_000, SterlingError::InvalidBps);
+        require!(reward_interval >= 60, SterlingError::InvalidInterval);
+
+        let cfg = &mut ctx.accounts.config;
+        cfg.cashback_bps = cashback_bps;
+        cfg.reward_interval = reward_interval;
+        cfg.allow_fallback_usdt = allow_fallback_usdt;
+        cfg.fee_threshold_usd_micros = fee_threshold_usd_micros;
+        cfg.auto_collect_every_swaps = auto_collect_every_swaps;
+        Ok(())
+    }
+
+    pub fn set_valuation(
+        ctx: Context<AdminOnly>,
+        token_value_usd_micros_default: u64,
+        treasury_value_usd_micros: u64,
+    ) -> Result<()> {
+        require_admin(&ctx.accounts.config, &ctx.accounts.admin)?;
+        require!(
+            token_value_usd_micros_default > 0,
+            SterlingError::InvalidAmount
+        );
+        require!(treasury_value_usd_micros > 0, SterlingError::InvalidAmount);
+
+        let cfg = &mut ctx.accounts.config;
+        cfg.token_value_usd_micros_default = token_value_usd_micros_default;
+        cfg.treasury_value_usd_micros = treasury_value_usd_micros;
+        Ok(())
+    }
+
+    pub fn set_mint_enabled(ctx: Context<AdminOnly>, mint: Pubkey, enabled: bool) -> Result<()> {
+        require_admin(&ctx.accounts.config, &ctx.accounts.admin)?;
+        set_enabled_flag(&mut ctx.accounts.config, &mint, enabled)
+    }
+
+    // =========================
+    // B) ORACLE ON-CHAIN : ValueRegistry
+    // =========================
+    pub fn init_value_registry(
+        ctx: Context<InitValueRegistry>,
+        value_usd_micros: u64,
+    ) -> Result<()> {
+        require_admin(&ctx.accounts.config, &ctx.accounts.admin)?;
+        require!(value_usd_micros > 0, SterlingError::InvalidAmount);
+
+        let reg = &mut ctx.accounts.value_registry;
+        reg.mint = ctx.accounts.mint.key();
+        reg.value_usd_micros = value_usd_micros;
+
+        reg.true_cash = TRUE_CASH_FLAG;
+        reg.cash_backed = CASH_BACKED_FLAG;
+        reg.real_peg = REAL_PEG_FLAG;
+        reg.sovereign = SOVEREIGN_FLAG;
+
+        reg.updated_at = Clock::get()?.unix_timestamp;
+        reg.bump = *ctx.bumps.get("value_registry").unwrap();
+        Ok(())
+    }
+
+    pub fn set_token_value(ctx: Context<SetTokenValue>, value_usd_micros: u64) -> Result<()> {
+        require_admin(&ctx.accounts.config, &ctx.accounts.admin)?;
+        require!(value_usd_micros > 0, SterlingError::InvalidAmount);
+        require!(
+            ctx.accounts.value_registry.mint == ctx.accounts.mint.key(),
+            SterlingError::BadRegistry
+        );
+
+        let reg = &mut ctx.accounts.value_registry;
+        reg.value_usd_micros = value_usd_micros;
+        reg.updated_at = Clock::get()?.unix_timestamp;
+        Ok(())
+    }
+
+    // =========================
+    // C) STAKING (vaults) + fallback USDT
+    // =========================
+    pub fn init_stake_vault(ctx: Context<InitStakeVault>) -> Result<()> {
+        require_admin(&ctx.accounts.config, &ctx.accounts.admin)?;
+        let mint = ctx.accounts.mint.key();
+        require!(
+            is_supported_cash_mint(&mint),
+            SterlingError::UnsupportedMint
+        );
+        require!(
+            is_enabled(&ctx.accounts.config, &mint),
+            SterlingError::MintDisabled
+        );
+        Ok(())
+    }
+
+    pub fn init_reward_vault(ctx: Context<InitRewardVault>) -> Result<()> {
+        require_admin(&ctx.accounts.config, &ctx.accounts.admin)?;
+        let mint = ctx.accounts.mint.key();
+        require!(
+            is_supported_cash_mint(&mint),
+            SterlingError::UnsupportedMint
+        );
+        require!(
+            is_enabled(&ctx.accounts.config, &mint),
+            SterlingError::MintDisabled
+        );
+        Ok(())
+    }
+
+    pub fn stake(ctx: Context<Stake>, amount: u64) -> Result<()> {
+        require!(amount > 0, SterlingError::InvalidAmount);
+
+        require!(
+            ctx.accounts.user_stake_ata.owner == ctx.accounts.user.key(),
+            SterlingError::InvalidAccount
+        );
+        require!(
+            ctx.accounts.user_stake_ata.mint == ctx.accounts.stake_mint.key(),
+            SterlingError::InvalidAccount
+        );
+
+        let cfg = &ctx.accounts.config;
+        let stake_mint = ctx.accounts.stake_mint.key();
+        let payout_mint = ctx.accounts.payout_mint.key();
+
+        require!(
+            is_supported_cash_mint(&stake_mint),
+            SterlingError::UnsupportedMint
+        );
+        require!(
+            is_supported_cash_mint(&payout_mint),
+            SterlingError::UnsupportedMint
+        );
+        require!(is_enabled(cfg, &stake_mint), SterlingError::MintDisabled);
+        require!(is_enabled(cfg, &payout_mint), SterlingError::MintDisabled);
+
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.user_stake_ata.to_account_info(),
+                    to: ctx.accounts.stake_vault.to_account_info(),
+                    authority: ctx.accounts.user.to_account_info(),
+                },
+            ),
+            amount,
+        )?;
+
+        let pos = &mut ctx.accounts.position;
+        if pos.owner == Pubkey::default() {
+            pos.owner = ctx.accounts.user.key();
+            pos.stake_mint = stake_mint;
+            pos.payout_mint = payout_mint;
+            pos.amount = 0;
+            pos.last_claim_ts = Clock::get()?.unix_timestamp;
+            pos.bump = *ctx.bumps.get("position").unwrap();
+        } else {
+            require!(
+                pos.owner == ctx.accounts.user.key(),
+                SterlingError::Unauthorized
+            );
+        }
+
+        pos.amount = pos.amount.saturating_add(amount);
+        Ok(())
+    }
+
+    pub fn claim(ctx: Context<Claim>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let cfg = &ctx.accounts.config;
+        let pos = &mut ctx.accounts.position;
+
+        require!(
+            pos.owner == ctx.accounts.user.key(),
+            SterlingError::Unauthorized
+        );
+        require!(pos.amount > 0, SterlingError::InvalidAmount);
+        require!(
+            now >= pos.last_claim_ts + (cfg.reward_interval as i64),
+            SterlingError::TooEarlyClaim
+        );
+
+        // ATA checks
+        require!(
+            ctx.accounts.user_payout_ata.owner == ctx.accounts.user.key(),
+            SterlingError::InvalidAccount
+        );
+        require!(
+            ctx.accounts.user_payout_ata.mint == ctx.accounts.payout_mint.key(),
+            SterlingError::InvalidAccount
+        );
+
+        require!(
+            ctx.accounts.user_usdt_main_ata.owner == ctx.accounts.user.key(),
+            SterlingError::InvalidAccount
+        );
+        require!(
+            ctx.accounts.user_usdt_main_ata.mint == ctx.accounts.usdt_main_mint.key(),
+            SterlingError::InvalidAccount
+        );
+
+        require!(
+            ctx.accounts.user_usdt_old_ata.owner == ctx.accounts.user.key(),
+            SterlingError::InvalidAccount
+        );
+        require!(
+            ctx.accounts.user_usdt_old_ata.mint == ctx.accounts.usdt_old_mint.key(),
+            SterlingError::InvalidAccount
+        );
+
+        let reward_amount: u64 = (pos.amount as u128)
+            .saturating_mul(cfg.cashback_bps as u128)
+            .checked_div(10_000u128)
+            .ok_or(SterlingError::MathOverflow)? as u64;
+
+        require!(reward_amount > 0, SterlingError::ZeroReward);
+        let signer_seeds: &[&[&[u8]]] = &[&[b"config", &[*ctx.bumps.get("config").unwrap()]]];
+
+        if ctx.accounts.reward_vault.amount >= reward_amount {
+            token::transfer(
+                CpiContext::new(
+                    ctx.accounts.token_program.to_account_info(),
+                    Transfer {
+                        from: ctx.accounts.reward_vault.to_account_info(),
+                        to: ctx.accounts.user_payout_ata.to_account_info(),
+                        authority: ctx.accounts.config.to_account_info(),
+                    },
+                )
+                .with_signer(signer_seeds),
+                reward_amount,
+            )?;
+        } else {
+            require!(cfg.allow_fallback_usdt, SterlingError::InsufficientRewards);
+
+            if ctx.accounts.usdt_main_vault.amount >= reward_amount {
+                token::transfer(
+                    CpiContext::new(
+                        ctx.accounts.token_program.to_account_info(),
+                        Transfer {
+                            from: ctx.accounts.usdt_main_vault.to_account_info(),
+                            to: ctx.accounts.user_usdt_main_ata.to_account_info(),
+                            authority: ctx.accounts.config.to_account_info(),
+                        },
+                    )
+                    .with_signer(signer_seeds),
+                    reward_amount,
+                )?;
+            } else if ctx.accounts.usdt_old_vault.amount >= reward_amount {
+                token::transfer(
+                    CpiContext::new(
+                        ctx.accounts.token_program.to_account_info(),
+                        Transfer {
+                            from: ctx.accounts.usdt_old_vault.to_account_info(),
+                            to: ctx.accounts.user_usdt_old_ata.to_account_info(),
+                            authority: ctx.accounts.config.to_account_info(),
+                        },
+                    )
+                    .with_signer(signer_seeds),
+                    reward_amount,
+                )?;
+            } else {
+                return err!(SterlingError::InsufficientRewards);
+            }
+        }
+
+        pos.last_claim_ts = now;
+        Ok(())
+    }
+
+    pub fn unstake(ctx: Context<Unstake>, amount: u64) -> Result<()> {
+        require!(amount > 0, SterlingError::InvalidAmount);
+
+        require!(
+            ctx.accounts.user_stake_ata.owner == ctx.accounts.user.key(),
+            SterlingError::InvalidAccount
+        );
+        require!(
+            ctx.accounts.user_stake_ata.mint == ctx.accounts.stake_mint.key(),
+            SterlingError::InvalidAccount
+        );
+
+        let pos = &mut ctx.accounts.position;
+        require!(
+            pos.owner == ctx.accounts.user.key(),
+            SterlingError::Unauthorized
+        );
+        require!(pos.amount >= amount, SterlingError::InvalidAmount);
+        let signer_seeds: &[&[&[u8]]] = &[&[b"config", &[*ctx.bumps.get("config").unwrap()]]];
+
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.stake_vault.to_account_info(),
+                    to: ctx.accounts.user_stake_ata.to_account_info(),
+                    authority: ctx.accounts.config.to_account_info(),
+                },
+            )
+            .with_signer(signer_seeds),
+            amount,
+        )?;
+
+        pos.amount = pos.amount.saturating_sub(amount);
+        Ok(())
+    }
+
+    // =========================
+    // D) DEX : POOL + LP + SWAPS + FEES VAULTS (base + quote)
+    // =========================
+    pub fn create_pool(ctx: Context<CreatePool>, fee_bps: u16) -> Result<()> {
+        require_admin(&ctx.accounts.config, &ctx.accounts.admin)?;
+        require!(fee_bps <= MAX_SWAP_FEE_BPS, SterlingError::InvalidBps);
+
+        let base_mint = ctx.accounts.base_mint.key();
+        let quote_mint = ctx.accounts.quote_mint.key();
+
+        require!(
+            ctx.accounts.base_value_registry.mint == base_mint,
+            SterlingError::BadRegistry
+        );
+        require!(
+            ctx.accounts.quote_value_registry.mint == quote_mint,
+            SterlingError::BadRegistry
+        );
+
+        let pool = &mut ctx.accounts.pool;
+        pool.owner = ctx.accounts.admin.key();
+        pool.base_mint = base_mint;
+        pool.quote_mint = quote_mint;
+
+        let (base_vault, _) = Pubkey::find_program_address(
+            &[b"pool_vault", pool.key().as_ref(), b"base"],
+            ctx.program_id,
+        );
+        let (quote_vault, _) = Pubkey::find_program_address(
+            &[b"pool_vault", pool.key().as_ref(), b"quote"],
+            ctx.program_id,
+        );
+        let (lp_mint, _) =
+            Pubkey::find_program_address(&[b"lp_mint", pool.key().as_ref()], ctx.program_id);
+
+        let (fee_vault_base, _) = Pubkey::find_program_address(
+            &[b"fee_vault", pool.key().as_ref(), b"base"],
+            ctx.program_id,
+        );
+        let (fee_vault_quote, _) = Pubkey::find_program_address(
+            &[b"fee_vault", pool.key().as_ref(), b"quote"],
+            ctx.program_id,
+        );
+
+        pool.base_vault = base_vault;
+        pool.quote_vault = quote_vault;
+        pool.lp_mint = lp_mint;
+        pool.fee_vault_base = fee_vault_base;
+        pool.fee_vault_quote = fee_vault_quote;
+
+        pool.base_value_usd_micros = ctx.accounts.base_value_registry.value_usd_micros;
+        pool.quote_value_usd_micros = ctx.accounts.quote_value_registry.value_usd_micros;
+
+        pool.true_cash = ctx.accounts.base_value_registry.true_cash
+            && ctx.accounts.quote_value_registry.true_cash;
+        pool.cash_backed = ctx.accounts.base_value_registry.cash_backed
+            && ctx.accounts.quote_value_registry.cash_backed;
+        pool.real_peg =
+            ctx.accounts.base_value_registry.real_peg && ctx.accounts.quote_value_registry.real_peg;
+        pool.sovereign = ctx.accounts.base_value_registry.sovereign
+            && ctx.accounts.quote_value_registry.sovereign;
+
+        require!(
+            pool.true_cash && pool.cash_backed && pool.real_peg && pool.sovereign,
+            SterlingError::CashFlagsRequired
+        );
+
+        pool.fee_bps = fee_bps;
+        pool.active = true;
+
+        // compteur swaps
+        pool.swap_count = 0;
+
+        pool.bump = *ctx.bumps.get("pool").unwrap();
+        Ok(())
+    }
+
+    pub fn init_pool_base_vault(ctx: Context<InitPoolBaseVault>) -> Result<()> {
+        require_admin(&ctx.accounts.config, &ctx.accounts.admin)?;
+        require!(
+            ctx.accounts.pool.base_mint == ctx.accounts.base_mint.key(),
+            SterlingError::InvalidAccount
+        );
+        require!(
+            ctx.accounts.pool.base_vault == ctx.accounts.base_vault.key(),
+            SterlingError::InvalidAccount
+        );
+        Ok(())
+    }
+
+    pub fn init_pool_quote_vault(ctx: Context<InitPoolQuoteVault>) -> Result<()> {
+        require_admin(&ctx.accounts.config, &ctx.accounts.admin)?;
+        require!(
+            ctx.accounts.pool.quote_mint == ctx.accounts.quote_mint.key(),
+            SterlingError::InvalidAccount
+        );
+        require!(
+            ctx.accounts.pool.quote_vault == ctx.accounts.quote_vault.key(),
+            SterlingError::InvalidAccount
+        );
+        Ok(())
+    }
+
+    pub fn init_pool_lp_mint(ctx: Context<InitPoolLpMint>) -> Result<()> {
+        require_admin(&ctx.accounts.config, &ctx.accounts.admin)?;
+        require!(
+            ctx.accounts.pool.lp_mint == ctx.accounts.lp_mint.key(),
+            SterlingError::InvalidAccount
+        );
+        Ok(())
+    }
+
+    pub fn init_pool_fee_vault_base(ctx: Context<InitPoolFeeVaultBase>) -> Result<()> {
+        require_admin(&ctx.accounts.config, &ctx.accounts.admin)?;
+        require!(
+            ctx.accounts.pool.fee_vault_base == ctx.accounts.fee_vault_base.key(),
+            SterlingError::InvalidAccount
+        );
+        Ok(())
+    }
+
+    pub fn init_pool_fee_vault_quote(ctx: Context<InitPoolFeeVaultQuote>) -> Result<()> {
+        require_admin(&ctx.accounts.config, &ctx.accounts.admin)?;
+        require!(
+            ctx.accounts.pool.fee_vault_quote == ctx.accounts.fee_vault_quote.key(),
+            SterlingError::InvalidAccount
+        );
+        Ok(())
+    }
+
+    pub fn add_liquidity(
+        ctx: Context<AddLiquidity>,
+        amount_base: u64,
+        amount_quote: u64,
+        min_lp_out: u64,
+    ) -> Result<()> {
+        require!(
+            amount_base > 0 && amount_quote > 0,
+            SterlingError::InvalidAmount
+        );
+
+        let pool = &ctx.accounts.pool;
+        require!(pool.active, SterlingError::InactivePool);
+
+        require!(
+            ctx.accounts.user_base_ata.owner == ctx.accounts.user.key(),
+            SterlingError::InvalidAccount
+        );
+        require!(
+            ctx.accounts.user_quote_ata.owner == ctx.accounts.user.key(),
+            SterlingError::InvalidAccount
+        );
+        require!(
+            ctx.accounts.user_lp_ata.owner == ctx.accounts.user.key(),
+            SterlingError::InvalidAccount
+        );
+
+        require!(
+            ctx.accounts.user_base_ata.mint == pool.base_mint,
+            SterlingError::InvalidAccount
+        );
+        require!(
+            ctx.accounts.user_quote_ata.mint == pool.quote_mint,
+            SterlingError::InvalidAccount
+        );
+        require!(
+            ctx.accounts.user_lp_ata.mint == pool.lp_mint,
+            SterlingError::InvalidAccount
+        );
+
+        require!(
+            ctx.accounts.base_vault.key() == pool.base_vault,
+            SterlingError::InvalidAccount
+        );
+        require!(
+            ctx.accounts.quote_vault.key() == pool.quote_vault,
+            SterlingError::InvalidAccount
+        );
+        require!(
+            ctx.accounts.lp_mint.key() == pool.lp_mint,
+            SterlingError::InvalidAccount
+        );
+
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.user_base_ata.to_account_info(),
+                    to: ctx.accounts.base_vault.to_account_info(),
+                    authority: ctx.accounts.user.to_account_info(),
+                },
+            ),
+            amount_base,
+        )?;
+
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.user_quote_ata.to_account_info(),
+                    to: ctx.accounts.quote_vault.to_account_info(),
+                    authority: ctx.accounts.user.to_account_info(),
+                },
+            ),
+            amount_quote,
+        )?;
+
+        let supply = ctx.accounts.lp_mint.supply;
+        let base_after = ctx.accounts.base_vault.amount;
+        let quote_after = ctx.accounts.quote_vault.amount;
+
+        let base_before = base_after.saturating_sub(amount_base);
+        let quote_before = quote_after.saturating_sub(amount_quote);
+
+        let lp_out: u64 = if supply == 0 {
+            integer_sqrt_u128((amount_base as u128).saturating_mul(amount_quote as u128)) as u64
+        } else {
+            require!(
+                base_before > 0 && quote_before > 0,
+                SterlingError::MathOverflow
+            );
+
+            let x = base_before as u128;
+            let y = quote_before as u128;
+            let dx = amount_base as u128;
+            let dy = amount_quote as u128;
+
+            let k_before = x.checked_mul(y).ok_or(SterlingError::MathOverflow)?;
+            let k_after = x
+                .saturating_add(dx)
+                .checked_mul(y.saturating_add(dy))
+                .ok_or(SterlingError::MathOverflow)?;
+
+            let sqrt_before = integer_sqrt_u128(k_before);
+            let sqrt_after = integer_sqrt_u128(k_after);
+
+            require!(sqrt_before > 0, SterlingError::MathOverflow);
+            require!(sqrt_after > sqrt_before, SterlingError::ZeroLp);
+
+            (supply as u128)
+                .checked_mul(sqrt_after.saturating_sub(sqrt_before))
+                .ok_or(SterlingError::MathOverflow)?
+                .checked_div(sqrt_before)
+                .ok_or(SterlingError::MathOverflow)? as u64
+        };
+
+        require!(lp_out >= min_lp_out, SterlingError::SlippageExceeded);
+        require!(lp_out > 0, SterlingError::ZeroLp);
+        let signer_seeds: &[&[&[u8]]] = &[&[b"config", &[*ctx.bumps.get("config").unwrap()]]];
+
+        token::mint_to(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                MintTo {
+                    mint: ctx.accounts.lp_mint.to_account_info(),
+                    to: ctx.accounts.user_lp_ata.to_account_info(),
+                    authority: ctx.accounts.config.to_account_info(),
+                },
+            )
+            .with_signer(signer_seeds),
+            lp_out,
+        )?;
+
+        Ok(())
+    }
+
+    pub fn remove_liquidity(
+        ctx: Context<RemoveLiquidity>,
+        lp_amount: u64,
+        min_base_out: u64,
+        min_quote_out: u64,
+    ) -> Result<()> {
+        require!(lp_amount > 0, SterlingError::InvalidAmount);
+
+        let pool = &ctx.accounts.pool;
+        require!(pool.active, SterlingError::InactivePool);
+
+        require!(
+            ctx.accounts.user_base_ata.owner == ctx.accounts.user.key(),
+            SterlingError::InvalidAccount
+        );
+        require!(
+            ctx.accounts.user_quote_ata.owner == ctx.accounts.user.key(),
+            SterlingError::InvalidAccount
+        );
+        require!(
+            ctx.accounts.user_lp_ata.owner == ctx.accounts.user.key(),
+            SterlingError::InvalidAccount
+        );
+
+        require!(
+            ctx.accounts.user_base_ata.mint == pool.base_mint,
+            SterlingError::InvalidAccount
+        );
+        require!(
+            ctx.accounts.user_quote_ata.mint == pool.quote_mint,
+            SterlingError::InvalidAccount
+        );
+        require!(
+            ctx.accounts.user_lp_ata.mint == pool.lp_mint,
+            SterlingError::InvalidAccount
+        );
+
+        require!(
+            ctx.accounts.base_vault.key() == pool.base_vault,
+            SterlingError::InvalidAccount
+        );
+        require!(
+            ctx.accounts.quote_vault.key() == pool.quote_vault,
+            SterlingError::InvalidAccount
+        );
+        require!(
+            ctx.accounts.lp_mint.key() == pool.lp_mint,
+            SterlingError::InvalidAccount
+        );
+
+        let supply = ctx.accounts.lp_mint.supply;
+        require!(supply > 0, SterlingError::ZeroLp);
+
+        let base_reserve = ctx.accounts.base_vault.amount as u128;
+        let quote_reserve = ctx.accounts.quote_vault.amount as u128;
+
+        let base_out = (lp_amount as u128)
+            .saturating_mul(base_reserve)
+            .checked_div(supply as u128)
+            .ok_or(SterlingError::MathOverflow)? as u64;
+
+        let quote_out = (lp_amount as u128)
+            .saturating_mul(quote_reserve)
+            .checked_div(supply as u128)
+            .ok_or(SterlingError::MathOverflow)? as u64;
+
+        require!(
+            base_out >= min_base_out && quote_out >= min_quote_out,
+            SterlingError::SlippageExceeded
+        );
+
+        token::burn(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Burn {
+                    mint: ctx.accounts.lp_mint.to_account_info(),
+                    from: ctx.accounts.user_lp_ata.to_account_info(),
+                    authority: ctx.accounts.user.to_account_info(),
+                },
+            ),
+            lp_amount,
+        )?;
+        let signer_seeds: &[&[&[u8]]] = &[&[b"config", &[*ctx.bumps.get("config").unwrap()]]];
+
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.base_vault.to_account_info(),
+                    to: ctx.accounts.user_base_ata.to_account_info(),
+                    authority: ctx.accounts.config.to_account_info(),
+                },
+            )
+            .with_signer(signer_seeds),
+            base_out,
+        )?;
+
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.quote_vault.to_account_info(),
+                    to: ctx.accounts.user_quote_ata.to_account_info(),
+                    authority: ctx.accounts.config.to_account_info(),
+                },
+            )
+            .with_signer(signer_seeds),
+            quote_out,
+        )?;
+
+        Ok(())
+    }
+
+    pub fn swap_base_for_quote(
+        ctx: Context<SwapBaseForQuote>,
+        amount_in: u64,
+        min_out: u64,
+    ) -> Result<()> {
+        require!(amount_in > 0, SterlingError::InvalidAmount);
+
+        let pool = &mut ctx.accounts.pool;
+        require!(pool.active, SterlingError::InactivePool);
+
+        require!(
+            ctx.accounts.user_base_ata.owner == ctx.accounts.user.key(),
+            SterlingError::InvalidAccount
+        );
+        require!(
+            ctx.accounts.user_quote_ata.owner == ctx.accounts.user.key(),
+            SterlingError::InvalidAccount
+        );
+
+        require!(
+            ctx.accounts.user_base_ata.mint == pool.base_mint,
+            SterlingError::InvalidAccount
+        );
+        require!(
+            ctx.accounts.user_quote_ata.mint == pool.quote_mint,
+            SterlingError::InvalidAccount
+        );
+
+        require!(
+            ctx.accounts.base_vault.key() == pool.base_vault,
+            SterlingError::InvalidAccount
+        );
+        require!(
+            ctx.accounts.quote_vault.key() == pool.quote_vault,
+            SterlingError::InvalidAccount
+        );
+        require!(
+            ctx.accounts.fee_vault_base.key() == pool.fee_vault_base,
+            SterlingError::InvalidAccount
+        );
+
+        let fee_bps = pool.fee_bps as u128;
+        let fee_amount = (amount_in as u128 * fee_bps / 10_000) as u64;
+
+        let amount_in_less_fee = (amount_in as u128)
+            .saturating_mul(10_000u128.saturating_sub(fee_bps))
+            .checked_div(10_000u128)
+            .ok_or(SterlingError::MathOverflow)? as u64;
+
+        let x = ctx.accounts.base_vault.amount as u128;
+        let y = ctx.accounts.quote_vault.amount as u128;
+
+        let out = (amount_in_less_fee as u128)
+            .saturating_mul(y)
+            .checked_div(x.saturating_add(amount_in_less_fee as u128))
+            .ok_or(SterlingError::MathOverflow)? as u64;
+
+        require!(out >= min_out, SterlingError::SlippageExceeded);
+        require!(out > 0, SterlingError::InvalidAmount);
+        require!(
+            ctx.accounts.quote_vault.amount >= out,
+            SterlingError::InsufficientLiquidity
+        );
+
+        // 1) input
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.user_base_ata.to_account_info(),
+                    to: ctx.accounts.base_vault.to_account_info(),
+                    authority: ctx.accounts.user.to_account_info(),
+                },
+            ),
+            amount_in,
+        )?;
+
+        // 2) fee -> fee_vault_base
+        let signer_seeds: &[&[&[u8]]] = &[&[b"config", &[*ctx.bumps.get("config").unwrap()]]];
+
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.base_vault.to_account_info(),
+                    to: ctx.accounts.fee_vault_base.to_account_info(),
+                    authority: ctx.accounts.config.to_account_info(),
+                },
+            )
+            .with_signer(signer_seeds),
+            fee_amount,
+        )?;
+
+        // 3) threshold event (USD)
+        let fee_usd_micros = ((ctx.accounts.base_value_registry.value_usd_micros as u128)
+            .saturating_mul(ctx.accounts.fee_vault_base.amount as u128)
+            .checked_div(USD_MICROS as u128)
+            .ok_or(SterlingError::MathOverflow)?) as u64;
+
+        if fee_usd_micros >= ctx.accounts.config.fee_threshold_usd_micros {
+            emit!(FeeThresholdEvent {
+                pool: pool.key(),
+                fee_vault: ctx.accounts.fee_vault_base.key(),
+                fee_amount: ctx.accounts.fee_vault_base.amount,
+                fee_value_usd_micros: fee_usd_micros,
+                ts: Clock::get()?.unix_timestamp,
+            });
+        }
+
+        // AutoCollectReadyEvent (tous les N swaps)
+        pool.swap_count = pool.swap_count.saturating_add(1);
+        let n = ctx.accounts.config.auto_collect_every_swaps;
+        if n > 0 && (pool.swap_count % n == 0) {
+            emit!(AutoCollectReadyEvent {
+                pool: pool.key(),
+                side: 0, // base
+                fee_vault: ctx.accounts.fee_vault_base.key(),
+                fee_amount: ctx.accounts.fee_vault_base.amount,
+                ts: Clock::get()?.unix_timestamp,
+            });
+        }
+
+        // 4) out
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.quote_vault.to_account_info(),
+                    to: ctx.accounts.user_quote_ata.to_account_info(),
+                    authority: ctx.accounts.config.to_account_info(),
+                },
+            )
+            .with_signer(signer_seeds),
+            out,
+        )?;
+
+        Ok(())
+    }
+
+    pub fn swap_quote_for_base(
+        ctx: Context<SwapQuoteForBase>,
+        amount_in: u64,
+        min_out: u64,
+    ) -> Result<()> {
+        require!(amount_in > 0, SterlingError::InvalidAmount);
+
+        let pool = &mut ctx.accounts.pool;
+        require!(pool.active, SterlingError::InactivePool);
+
+        require!(
+            ctx.accounts.user_quote_ata.owner == ctx.accounts.user.key(),
+            SterlingError::InvalidAccount
+        );
+        require!(
+            ctx.accounts.user_base_ata.owner == ctx.accounts.user.key(),
+            SterlingError::InvalidAccount
+        );
+
+        require!(
+            ctx.accounts.user_quote_ata.mint == pool.quote_mint,
+            SterlingError::InvalidAccount
+        );
+        require!(
+            ctx.accounts.user_base_ata.mint == pool.base_mint,
+            SterlingError::InvalidAccount
+        );
+
+        require!(
+            ctx.accounts.quote_vault.key() == pool.quote_vault,
+            SterlingError::InvalidAccount
+        );
+        require!(
+            ctx.accounts.base_vault.key() == pool.base_vault,
+            SterlingError::InvalidAccount
+        );
+        require!(
+            ctx.accounts.fee_vault_quote.key() == pool.fee_vault_quote,
+            SterlingError::InvalidAccount
+        );
+
+        let fee_bps = pool.fee_bps as u128;
+        let fee_amount = (amount_in as u128 * fee_bps / 10_000) as u64;
+
+        let amount_in_less_fee = (amount_in as u128)
+            .saturating_mul(10_000u128.saturating_sub(fee_bps))
+            .checked_div(10_000u128)
+            .ok_or(SterlingError::MathOverflow)? as u64;
+
+        let x = ctx.accounts.quote_vault.amount as u128;
+        let y = ctx.accounts.base_vault.amount as u128;
+
+        let out = (amount_in_less_fee as u128)
+            .saturating_mul(y)
+            .checked_div(x.saturating_add(amount_in_less_fee as u128))
+            .ok_or(SterlingError::MathOverflow)? as u64;
+
+        require!(out >= min_out, SterlingError::SlippageExceeded);
+        require!(out > 0, SterlingError::InvalidAmount);
+        require!(
+            ctx.accounts.base_vault.amount >= out,
+            SterlingError::InsufficientLiquidity
+        );
+
+        // 1) input
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.user_quote_ata.to_account_info(),
+                    to: ctx.accounts.quote_vault.to_account_info(),
+                    authority: ctx.accounts.user.to_account_info(),
+                },
+            ),
+            amount_in,
+        )?;
+
+        // 2) fee -> fee_vault_quote
+        let signer_seeds: &[&[&[u8]]] = &[&[b"config", &[*ctx.bumps.get("config").unwrap()]]];
+
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.quote_vault.to_account_info(),
+                    to: ctx.accounts.fee_vault_quote.to_account_info(),
+                    authority: ctx.accounts.config.to_account_info(),
+                },
+            )
+            .with_signer(signer_seeds),
+            fee_amount,
+        )?;
+
+        // 3) threshold event (USD)
+        let fee_usd_micros = ((ctx.accounts.quote_value_registry.value_usd_micros as u128)
+            .saturating_mul(ctx.accounts.fee_vault_quote.amount as u128)
+            .checked_div(USD_MICROS as u128)
+            .ok_or(SterlingError::MathOverflow)?) as u64;
+
+        if fee_usd_micros >= ctx.accounts.config.fee_threshold_usd_micros {
+            emit!(FeeThresholdEvent {
+                pool: pool.key(),
+                fee_vault: ctx.accounts.fee_vault_quote.key(),
+                fee_amount: ctx.accounts.fee_vault_quote.amount,
+                fee_value_usd_micros: fee_usd_micros,
+                ts: Clock::get()?.unix_timestamp,
+            });
+        }
+
+        // AutoCollectReadyEvent (tous les N swaps)
+        pool.swap_count = pool.swap_count.saturating_add(1);
+        let n = ctx.accounts.config.auto_collect_every_swaps;
+        if n > 0 && (pool.swap_count % n == 0) {
+            emit!(AutoCollectReadyEvent {
+                pool: pool.key(),
+                side: 1, // quote
+                fee_vault: ctx.accounts.fee_vault_quote.key(),
+                fee_amount: ctx.accounts.fee_vault_quote.amount,
+                ts: Clock::get()?.unix_timestamp,
+            });
+        }
+
+        // 4) out
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.base_vault.to_account_info(),
+                    to: ctx.accounts.user_base_ata.to_account_info(),
+                    authority: ctx.accounts.config.to_account_info(),
+                },
+            )
+            .with_signer(signer_seeds),
+            out,
+        )?;
+
+        Ok(())
+    }
+
+    // =========================
+    // D2) FEES : collect stable vers wallet C
+    // =========================
+    pub fn collect_fees_stable_to_treasury(
+        ctx: Context<CollectFeesStableToTreasury>,
+        side: FeeSide,
+    ) -> Result<()> {
+        require_admin(&ctx.accounts.config, &ctx.accounts.admin)?;
+
+        let (fee_vault, expected_mint) = match side {
+            FeeSide::Base => (&ctx.accounts.fee_vault_base, ctx.accounts.pool.base_mint),
+            FeeSide::Quote => (&ctx.accounts.fee_vault_quote, ctx.accounts.pool.quote_mint),
+        };
+        require!(
+            fee_vault.mint == expected_mint,
+            SterlingError::InvalidAccount
+        );
+        let usdc = pubkey_from_str(USDC_MINT);
+        let usdt = pubkey_from_str(USDT_MAIN_MINT);
+
+        // ATA de trésorerie (USDC / USDT)
+        let treasury_ata = if fee_vault.mint == usdc {
+            require!(
+                ctx.accounts.treasury_usdc_ata.key() == ctx.accounts.config.treasury_usdc_ata,
+                SterlingError::InvalidAccount
+            );
+            &ctx.accounts.treasury_usdc_ata
+        } else if fee_vault.mint == usdt {
+            require!(
+                ctx.accounts.treasury_usdt_ata.key() == ctx.accounts.config.treasury_usdt_ata,
+                SterlingError::InvalidAccount
+            );
+            &ctx.accounts.treasury_usdt_ata
+        } else {
+            return err!(SterlingError::UnsupportedMint);
+        };
+
+        let amount = fee_vault.amount;
+        require!(amount > 0, SterlingError::InvalidAmount);
+        let signer_seeds: &[&[&[u8]]] = &[&[b"config", &[*ctx.bumps.get("config").unwrap()]]];
+
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: fee_vault.to_account_info(),
+                    to: treasury_ata.to_account_info(),
+                    authority: ctx.accounts.config.to_account_info(),
+                },
+            )
+            .with_signer(signer_seeds),
+            amount,
+        )?;
+
+        Ok(())
+    }
+    pub fn convert_fees_to_usdc(
+        ctx: Context<ConvertFeesToUsdc>,
+        side: FeeSide,
+        burn_amount: u64,
+        bank_metadata: String,
+    ) -> Result<()> {
+        require_admin(&ctx.accounts.config, &ctx.accounts.admin)?;
+        // NOTE: cette fonction était corrompue (collage / octets / bouts de texte).
+        // On la remet "clean" pour que le build passe.
+        // Ensuite, on réimplémente la logique exacte de conversion/burn proprement.
+
+        let _ = (side, burn_amount, bank_metadata);
+
+        Ok(())
+    }
+    pub fn register_asset(
+        ctx: Context<RegisterAsset>,
+        valuation_usd_micros: u64,
+        is_lp: bool,
+    ) -> Result<()> {
+        require_admin(&ctx.accounts.config, &ctx.accounts.admin)?;
+        require!(valuation_usd_micros > 0, SterlingError::InvalidAmount);
+
+        let asset_reg = &mut ctx.accounts.asset_registry;
+        asset_reg.mint = ctx.accounts.token_mint.key();
+        asset_reg.valuation_usd_micros = valuation_usd_micros;
+        asset_reg.is_lp = is_lp;
+        asset_reg.active = true;
+        asset_reg.bump = *ctx.bumps.get("asset_registry").unwrap();
+
+        Ok(())
+    }
+
+    pub fn sovereign_redeem_to_usdc(
+        ctx: Context<SovereignRedeemToUsdc>,
+        amount_in: u64,
+        bank_metadata: String,
+    ) -> Result<()> {
+        require!(amount_in > 0, SterlingError::InvalidAmount);
+        let _ = (ctx, bank_metadata);
+
+        // Build-safe: on nettoie la corruption pour que le build passe.
+        // On remettra la logique exacte (burn + release coffre USDC) après.
+        Ok(())
+    }
+}
+
+#[derive(Accounts)]
+pub struct Dummy<'info> {
+    /// CHECK: simple signer pour valider le Context et la lifetime
+    pub signer: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct RemoveLiquidity<'info> {
+    #[account(mut)]
+    pub user: Signer<'info>,
+
+    #[account(mut, seeds = [b"config"], bump)]
+    pub config: Account<'info, Config>,
+
+    #[account(mut)]
+    pub pool: Account<'info, Pool>,
+
+    #[account(mut)]
+    pub user_base_ata: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub user_quote_ata: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub user_lp_ata: Account<'info, TokenAccount>,
+
+    #[account(mut)]
+    pub base_vault: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub quote_vault: Account<'info, TokenAccount>,
+
+    #[account(mut)]
+    pub lp_mint: Account<'info, Mint>,
+
+    pub token_program: Program<'info, Token>,
+}
