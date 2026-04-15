@@ -45,8 +45,13 @@ After pushing this repo, run:
 ```bash
 solana-verify verify-from-repo \
   --program-id 7v9sLrk92NNLLUfXLJw3o7MycZNvwsTK6kLWfWb8vcVA \
+  --library-name sterling_amm_mainnet \
   https://github.com/<org-or-user>/<repo>
 ```
+
+Prerequisite:
+
+- Docker daemon must be running locally (required by `solana-verify verify-from-repo`).
 
 ## Solscan verification artifacts
 
