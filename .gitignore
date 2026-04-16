@@ -4,3 +4,5 @@ target.*/
 .DS_Store
 *.log
 *.tmp
+!vendor/cc/src/target/
+!vendor/cc/src/target/**
