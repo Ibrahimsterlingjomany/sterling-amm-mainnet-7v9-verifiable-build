@@ -46,15 +46,15 @@ impl VisitState {
     fn descend(self, key: &str) -> Self {
         match (self, key) {
             (
-                Self::Root | Self::TargetWithSpec,
+                VisitState::Root | VisitState::TargetWithSpec,
                 "dependencies" | "build-dependencies" | "dev-dependencies",
-            ) => Self::Dependencies,
-            (Self::Root, "target") => Self::Target,
-            (Self::Root | Self::TargetWithSpec, _) => Self::Other,
-            (Self::Target, _) => Self::TargetWithSpec,
-            (Self::Dependencies, _) => Self::SubDependencies,
-            (Self::SubDependencies, _) => Self::SubDependencies,
-            (Self::Other, _) => Self::Other,
+            ) => VisitState::Dependencies,
+            (VisitState::Root, "target") => VisitState::Target,
+            (VisitState::Root | VisitState::TargetWithSpec, _) => VisitState::Other,
+            (VisitState::Target, _) => VisitState::TargetWithSpec,
+            (VisitState::Dependencies, _) => VisitState::SubDependencies,
+            (VisitState::SubDependencies, _) => VisitState::SubDependencies,
+            (VisitState::Other, _) => VisitState::Other,
         }
     }
 }

@@ -1,6 +1,6 @@
 {
   "git": {
-    "sha1": "79a575fb7af56d26deeda94fef8f55bde7a90df3"
+    "sha1": "042829be1c129b5a5f90ebd6edd36f80416ccf6b"
   },
-  "path_in_vcs": "token/transfer-hook-interface"
+  "path_in_vcs": "token/transfer-hook/interface"
 }

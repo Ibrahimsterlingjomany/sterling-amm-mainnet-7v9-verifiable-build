@@ -12,8 +12,6 @@ cfg_if::cfg_if! {
         }
     } else if #[cfg(blake3_neon)] {
         pub const MAX_SIMD_DEGREE: usize = 4;
-    } else if #[cfg(blake3_wasm32_simd)] {
-        pub const MAX_SIMD_DEGREE: usize = 4;
     } else {
         pub const MAX_SIMD_DEGREE: usize = 1;
     }
@@ -34,8 +32,6 @@ cfg_if::cfg_if! {
         }
     } else if #[cfg(blake3_neon)] {
         pub const MAX_SIMD_DEGREE_OR_2: usize = 4;
-    } else if #[cfg(blake3_wasm32_simd)] {
-        pub const MAX_SIMD_DEGREE_OR_2: usize = 4;
     } else {
         pub const MAX_SIMD_DEGREE_OR_2: usize = 2;
     }
@@ -55,9 +51,6 @@ pub enum Platform {
     AVX512,
     #[cfg(blake3_neon)]
     NEON,
-    #[cfg(blake3_wasm32_simd)]
-    #[allow(non_camel_case_types)]
-    WASM32_SIMD,
 }
 
 impl Platform {
@@ -92,10 +85,6 @@ impl Platform {
         {
             return Platform::NEON;
         }
-        #[cfg(blake3_wasm32_simd)]
-        {
-            return Platform::WASM32_SIMD;
-        }
         Platform::Portable
     }
 
@@ -113,8 +102,6 @@ impl Platform {
             Platform::AVX512 => 16,
             #[cfg(blake3_neon)]
             Platform::NEON => 4,
-            #[cfg(blake3_wasm32_simd)]
-            Platform::WASM32_SIMD => 4,
         };
         debug_assert!(degree <= MAX_SIMD_DEGREE);
         degree
@@ -149,10 +136,6 @@ impl Platform {
             // No NEON compress_in_place() implementation yet.
             #[cfg(blake3_neon)]
             Platform::NEON => portable::compress_in_place(cv, block, block_len, counter, flags),
-            #[cfg(blake3_wasm32_simd)]
-            Platform::WASM32_SIMD => {
-                crate::wasm32_simd::compress_in_place(cv, block, block_len, counter, flags)
-            }
         }
     }
 
@@ -185,10 +168,6 @@ impl Platform {
             // No NEON compress_xof() implementation yet.
             #[cfg(blake3_neon)]
             Platform::NEON => portable::compress_xof(cv, block, block_len, counter, flags),
-            #[cfg(blake3_wasm32_simd)]
-            Platform::WASM32_SIMD => {
-                crate::wasm32_simd::compress_xof(cv, block, block_len, counter, flags)
-            }
         }
     }
 
@@ -295,20 +274,6 @@ impl Platform {
                     out,
                 )
             },
-            // Assumed to be safe if the "wasm32_simd" feature is on.
-            #[cfg(blake3_wasm32_simd)]
-            Platform::WASM32_SIMD => unsafe {
-                crate::wasm32_simd::hash_many(
-                    inputs,
-                    key,
-                    counter,
-                    increment_counter,
-                    flags,
-                    flags_start,
-                    flags_end,
-                    out,
-                )
-            },
         }
     }
 
@@ -395,12 +360,6 @@ impl Platform {
         // Assumed to be safe if the "neon" feature is on.
         Some(Self::NEON)
     }
-
-    #[cfg(blake3_wasm32_simd)]
-    pub fn wasm32_simd() -> Option<Self> {
-        // Assumed to be safe if the "wasm32_simd" feature is on.
-        Some(Self::WASM32_SIMD)
-    }
 }
 
 // Note that AVX-512 is divided into multiple featuresets, and we use two of
@@ -408,6 +367,7 @@ impl Platform {
 #[cfg(blake3_avx512_ffi)]
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[inline(always)]
+#[allow(unreachable_code)]
 pub fn avx512_detected() -> bool {
     if cfg!(miri) {
         return false;
@@ -417,13 +377,24 @@ pub fn avx512_detected() -> bool {
     if cfg!(feature = "no_avx512") {
         return false;
     }
-
-    cpufeatures::new!(has_avx512, "avx512f", "avx512vl");
-    has_avx512::get()
+    // Static check, e.g. for building with target-cpu=native.
+    #[cfg(all(target_feature = "avx512f", target_feature = "avx512vl"))]
+    {
+        return true;
+    }
+    // Dynamic check, if std is enabled.
+    #[cfg(feature = "std")]
+    {
+        if is_x86_feature_detected!("avx512f") && is_x86_feature_detected!("avx512vl") {
+            return true;
+        }
+    }
+    false
 }
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[inline(always)]
+#[allow(unreachable_code)]
 pub fn avx2_detected() -> bool {
     if cfg!(miri) {
         return false;
@@ -433,13 +404,24 @@ pub fn avx2_detected() -> bool {
     if cfg!(feature = "no_avx2") {
         return false;
     }
-
-    cpufeatures::new!(has_avx2, "avx2");
-    has_avx2::get()
+    // Static check, e.g. for building with target-cpu=native.
+    #[cfg(target_feature = "avx2")]
+    {
+        return true;
+    }
+    // Dynamic check, if std is enabled.
+    #[cfg(feature = "std")]
+    {
+        if is_x86_feature_detected!("avx2") {
+            return true;
+        }
+    }
+    false
 }
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[inline(always)]
+#[allow(unreachable_code)]
 pub fn sse41_detected() -> bool {
     if cfg!(miri) {
         return false;
@@ -449,13 +431,24 @@ pub fn sse41_detected() -> bool {
     if cfg!(feature = "no_sse41") {
         return false;
     }
-
-    cpufeatures::new!(has_sse41, "sse4.1");
-    has_sse41::get()
+    // Static check, e.g. for building with target-cpu=native.
+    #[cfg(target_feature = "sse4.1")]
+    {
+        return true;
+    }
+    // Dynamic check, if std is enabled.
+    #[cfg(feature = "std")]
+    {
+        if is_x86_feature_detected!("sse4.1") {
+            return true;
+        }
+    }
+    false
 }
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[inline(always)]
+#[allow(unreachable_code)]
 pub fn sse2_detected() -> bool {
     if cfg!(miri) {
         return false;
@@ -465,9 +458,19 @@ pub fn sse2_detected() -> bool {
     if cfg!(feature = "no_sse2") {
         return false;
     }
-
-    cpufeatures::new!(has_sse2, "sse2");
-    has_sse2::get()
+    // Static check, e.g. for building with target-cpu=native.
+    #[cfg(target_feature = "sse2")]
+    {
+        return true;
+    }
+    // Dynamic check, if std is enabled.
+    #[cfg(feature = "std")]
+    {
+        if is_x86_feature_detected!("sse2") {
+            return true;
+        }
+    }
+    false
 }
 
 #[inline(always)]

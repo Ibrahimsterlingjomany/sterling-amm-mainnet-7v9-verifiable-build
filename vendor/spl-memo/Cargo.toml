@@ -12,11 +12,12 @@
 [package]
 edition = "2021"
 name = "spl-memo"
-version = "4.0.4"
+version = "4.0.0"
 authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
 description = "Solana Program Library Memo"
 license = "Apache-2.0"
 repository = "https://github.com/solana-labs/solana-program-library"
+resolver = "1"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -28,13 +29,13 @@ crate-type = [
 ]
 
 [dependencies.solana-program]
-version = "1.18.11"
+version = "1.16.1"
 
 [dev-dependencies.solana-program-test]
-version = "1.18.11"
+version = "1.16.1"
 
 [dev-dependencies.solana-sdk]
-version = "1.18.11"
+version = "1.16.1"
 
 [features]
 no-entrypoint = []

@@ -288,13 +288,16 @@ pub(crate) mod parsing {
     use crate::expr::ExprBlock;
     use crate::expr::{Expr, ExprPath};
     use crate::ext::IdentExt as _;
+    #[cfg(feature = "full")]
     use crate::generics::TypeParamBound;
     use crate::ident::Ident;
     use crate::lifetime::Lifetime;
     use crate::lit::Lit;
     use crate::parse::{Parse, ParseStream};
+    #[cfg(feature = "full")]
+    use crate::path::Constraint;
     use crate::path::{
-        AngleBracketedGenericArguments, AssocConst, AssocType, Constraint, GenericArgument,
+        AngleBracketedGenericArguments, AssocConst, AssocType, GenericArgument,
         ParenthesizedGenericArguments, Path, PathArguments, PathSegment, QSelf,
     };
     use crate::punctuated::Punctuated;
@@ -360,6 +363,7 @@ pub(crate) mod parsing {
                         };
                     }
 
+                    #[cfg(feature = "full")]
                     if let Some(colon_token) = input.parse::<Option<Token![:]>>()? {
                         let segment = ty.path.segments.pop().unwrap().into_value();
                         return Ok(GenericArgument::Constraint(Constraint {

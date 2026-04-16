@@ -1,3 +1,5 @@
+#[cfg(feature = "serde-traits")]
+use serde::{Deserialize, Serialize};
 use {
     crate::{
         extension::{
@@ -17,6 +19,8 @@ pub mod processor;
 
 /// Transfer hook extension data for mints.
 #[repr(C)]
+#[cfg_attr(feature = "serde-traits", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde-traits", serde(rename_all = "camelCase"))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
 pub struct TransferHook {
     /// Authority that can set the transfer hook program id
@@ -25,7 +29,10 @@ pub struct TransferHook {
     pub program_id: OptionalNonZeroPubkey,
 }
 
-/// Indicates that the tokens from this account belong to a mint with a transfer hook
+/// Indicates that the tokens from this account belong to a mint with a transfer
+/// hook
+#[cfg_attr(feature = "serde-traits", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde-traits", serde(rename_all = "camelCase"))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
 #[repr(transparent)]
 pub struct TransferHookAccount {
@@ -52,7 +59,8 @@ pub fn get_program_id<S: BaseState, BSE: BaseStateWithExtensions<S>>(
         .and_then(|e| Option::<Pubkey>::from(e.program_id))
 }
 
-/// Helper function to set the transferring flag before calling into transfer hook
+/// Helper function to set the transferring flag before calling into transfer
+/// hook
 pub fn set_transferring(account: &mut StateWithExtensionsMut<Account>) -> Result<(), ProgramError> {
     let account_extension = account.get_extension_mut::<TransferHookAccount>()?;
     account_extension.transferring = true.into();

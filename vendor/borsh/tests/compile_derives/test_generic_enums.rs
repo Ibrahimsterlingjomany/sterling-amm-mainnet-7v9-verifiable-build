@@ -15,7 +15,6 @@ use std::collections::HashMap;
 use alloc::collections::BTreeMap;
 
 /// `T: Ord` bound is required for `BorshDeserialize` derive to be successful
-#[allow(unused)]
 #[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug)]
 enum E<T: Ord, U, W> {
     X { f: BTreeMap<T, U> },
@@ -23,7 +22,6 @@ enum E<T: Ord, U, W> {
 }
 
 #[cfg(hash_collections)]
-#[allow(unused)]
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
 enum I1<K, V, R> {
     B {
@@ -36,7 +34,6 @@ enum I1<K, V, R> {
 }
 
 #[cfg(hash_collections)]
-#[allow(unused)]
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
 enum I2<K: Ord + Eq + Hash, R, U> {
     B { x: HashMap<K, R>, y: String },

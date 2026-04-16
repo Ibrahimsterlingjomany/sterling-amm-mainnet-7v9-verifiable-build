@@ -8,7 +8,8 @@ solana_program::declare_id!("So11111111111111111111111111111111111111112");
 
 #[cfg(test)]
 mod tests {
-    use {super::*, solana_program::native_token::*};
+    use super::*;
+    use solana_program::native_token::*;
 
     #[test]
     fn test_decimals() {

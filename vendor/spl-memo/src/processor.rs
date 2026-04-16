@@ -1,12 +1,10 @@
 //! Program state processor
 
-use {
-    solana_program::{
-        account_info::AccountInfo, entrypoint::ProgramResult, msg, program_error::ProgramError,
-        pubkey::Pubkey,
-    },
-    std::str::from_utf8,
+use solana_program::{
+    account_info::AccountInfo, entrypoint::ProgramResult, msg, program_error::ProgramError,
+    pubkey::Pubkey,
 };
+use std::str::from_utf8;
 
 /// Instruction processor
 pub fn process_instruction(
@@ -38,13 +36,11 @@ pub fn process_instruction(
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        solana_program::{
-            account_info::IntoAccountInfo, program_error::ProgramError, pubkey::Pubkey,
-        },
-        solana_sdk::account::Account,
+    use super::*;
+    use solana_program::{
+        account_info::IntoAccountInfo, program_error::ProgramError, pubkey::Pubkey,
     };
+    use solana_sdk::account::Account;
 
     #[test]
     fn test_utf8_memo() {

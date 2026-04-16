@@ -60,6 +60,7 @@ mod librustc_parse {
 
     use crate::repo;
     use rustc_errors::emitter::Emitter;
+    use rustc_errors::registry::Registry;
     use rustc_errors::translation::Translator;
     use rustc_errors::{DiagCtxt, DiagInner};
     use rustc_parse::lexer::StripTokens;
@@ -73,7 +74,7 @@ mod librustc_parse {
         struct SilentEmitter;
 
         impl Emitter for SilentEmitter {
-            fn emit_diagnostic(&mut self, _diag: DiagInner) {}
+            fn emit_diagnostic(&mut self, _diag: DiagInner, _registry: &Registry) {}
             fn source_map(&self) -> Option<&SourceMap> {
                 None
             }

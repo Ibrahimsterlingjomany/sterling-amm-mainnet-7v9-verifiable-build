@@ -13,7 +13,8 @@ use std::panic;
 
 pub fn librustc_expr(input: &str) -> Option<Box<ast::Expr>> {
     match panic::catch_unwind(|| {
-        let sess = ParseSess::new();
+        let locale_resources = rustc_driver::DEFAULT_LOCALE_RESOURCES.to_vec();
+        let sess = ParseSess::new(locale_resources);
         let name = FileName::Custom("test_precedence".to_string());
         let mut parser = rustc_parse::new_parser_from_source_str(
             &sess,

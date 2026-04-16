@@ -32,14 +32,17 @@
 //!
 //! # Cargo Features
 //!
-//! The `std` feature (the only feature enabled by default) enables the
-//! [`Write`] implementation and the [`update_reader`](Hasher::update_reader)
-//! method for [`Hasher`], and also the [`Read`] and [`Seek`] implementations
-//! for [`OutputReader`].
+//! The `std` feature (the only feature enabled by default) is required for
+//! implementations of the [`Write`] and [`Seek`] traits, the
+//! [`update_reader`](Hasher::update_reader) helper method, and runtime CPU
+//! feature detection on x86. If this feature is disabled, the only way to use
+//! the x86 SIMD implementations is to enable the corresponding instruction sets
+//! globally, with e.g. `RUSTFLAGS="-C target-cpu=native"`. The resulting binary
+//! will not be portable to other machines.
 //!
 //! The `rayon` feature (disabled by default, but enabled for [docs.rs]) adds
 //! the [`update_rayon`](Hasher::update_rayon) and (in combination with `mmap`
-//! below) [`update_mmap_rayon`](Hasher::update_mmap_rayon) methods for
+//! below) [`update_mmap_rayon`](Hasher::update_mmap_rayon) methods, for
 //! multithreaded hashing. However, even if this feature is enabled, all other
 //! APIs remain single-threaded.
 //!
@@ -63,10 +66,6 @@
 //! enabling this feature will produce a binary that's not portable to CPUs
 //! without NEON support.
 //!
-//! The `wasm32_simd` feature enables the WASM SIMD implementation for all `wasm32-`
-//! targets. Similar to the `neon` feature, if `wasm32_simd` is enabled, WASM SIMD
-//! support is assumed. This may become the default in the future.
-//!
 //! The `traits-preview` feature enables implementations of traits from the
 //! RustCrypto [`digest`] crate, and re-exports that crate as `traits::digest`.
 //! However, the traits aren't stable, and they're expected to change in
@@ -79,7 +78,6 @@
 //! [BLAKE3]: https://blake3.io
 //! [Rayon]: https://github.com/rayon-rs/rayon
 //! [docs.rs]: https://docs.rs/
-//! [`Read`]: https://doc.rust-lang.org/std/io/trait.Read.html
 //! [`Write`]: https://doc.rust-lang.org/std/io/trait.Write.html
 //! [`Seek`]: https://doc.rust-lang.org/std/io/trait.Seek.html
 //! [`digest`]: https://crates.io/crates/digest
@@ -90,11 +88,12 @@
 #[cfg(test)]
 mod test;
 
+// The guts module is for incremental use cases like the `bao` crate that need
+// to explicitly compute chunk and parent chaining values. It is semi-stable
+// and likely to keep working, but largely undocumented and not intended for
+// widespread use.
 #[doc(hidden)]
-#[deprecated(since = "1.8.0", note = "use the hazmat module instead")]
 pub mod guts;
-
-pub mod hazmat;
 
 /// Undocumented and unstable, for benchmarks only.
 #[doc(hidden)]
@@ -128,10 +127,6 @@ mod sse41;
 #[path = "ffi_sse41.rs"]
 mod sse41;
 
-#[cfg(blake3_wasm32_simd)]
-#[path = "wasm32_simd.rs"]
-mod wasm32_simd;
-
 #[cfg(feature = "traits-preview")]
 pub mod traits;
 
@@ -152,20 +147,8 @@ pub const OUT_LEN: usize = 32;
 /// The number of bytes in a key, 32.
 pub const KEY_LEN: usize = 32;
 
-/// The number of bytes in a block, 64.
-///
-/// You don't usually need to think about this number. One case where it matters is calling
-/// [`OutputReader::fill`] in a loop, where using a `buf` argument that's a multiple of `BLOCK_LEN`
-/// avoids repeating work.
-pub const BLOCK_LEN: usize = 64;
-
-/// The number of bytes in a chunk, 1024.
-///
-/// You don't usually need to think about this number, but it often comes up in benchmarks, because
-/// the maximum degree of parallelism used by the implementation equals the number of chunks.
-pub const CHUNK_LEN: usize = 1024;
-
 const MAX_DEPTH: usize = 54; // 2^54 * CHUNK_LEN = 2^64
+use guts::{BLOCK_LEN, CHUNK_LEN};
 
 // While iterating the compression function within a chunk, the CV is
 // represented as words, to avoid doing two extra endianness conversions for
@@ -236,7 +219,7 @@ fn counter_high(counter: u64) -> u32 {
 /// [`Display`]: https://doc.rust-lang.org/std/fmt/trait.Display.html
 /// [`FromStr`]: https://doc.rust-lang.org/std/str/trait.FromStr.html
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-#[derive(Clone, Copy, Hash, Eq)]
+#[derive(Clone, Copy, Hash)]
 pub struct Hash([u8; OUT_LEN]);
 
 impl Hash {
@@ -251,21 +234,6 @@ impl Hash {
     /// Create a `Hash` from its raw bytes representation.
     pub const fn from_bytes(bytes: [u8; OUT_LEN]) -> Self {
         Self(bytes)
-    }
-
-    /// The raw bytes of the `Hash`, as a slice. Useful for serialization. Note that byte arrays
-    /// don't provide constant-time equality checking, so if you need to compare hashes, prefer
-    /// the `Hash` type.
-    #[inline]
-    pub const fn as_slice(&self) -> &[u8] {
-        self.0.as_slice()
-    }
-
-    /// Create a `Hash` from its raw bytes representation as a slice.
-    ///
-    /// Returns an error if the slice is not exactly 32 bytes long.
-    pub fn from_slice(bytes: &[u8]) -> Result<Self, core::array::TryFromSliceError> {
-        Ok(Self::from_bytes(bytes.try_into()?))
     }
 
     /// Encode a `Hash` in lowercase hexadecimal.
@@ -370,6 +338,8 @@ impl PartialEq<[u8]> for Hash {
         constant_time_eq::constant_time_eq(&self.0, other)
     }
 }
+
+impl Eq for Hash {}
 
 impl fmt::Display for Hash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -519,7 +489,7 @@ impl ChunkState {
         }
     }
 
-    fn count(&self) -> usize {
+    fn len(&self) -> usize {
         BLOCK_LEN * self.blocks_compressed as usize + self.buf_len as usize
     }
 
@@ -576,7 +546,7 @@ impl ChunkState {
 
         self.fill_buf(&mut input);
         debug_assert!(input.is_empty());
-        debug_assert!(self.count() <= CHUNK_LEN);
+        debug_assert!(self.len() <= CHUNK_LEN);
         self
     }
 
@@ -597,7 +567,7 @@ impl ChunkState {
 impl fmt::Debug for ChunkState {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("ChunkState")
-            .field("count", &self.count())
+            .field("len", &self.len())
             .field("chunk_counter", &self.chunk_counter)
             .field("flags", &self.flags)
             .field("platform", &self.platform)
@@ -661,10 +631,20 @@ impl IncrementCounter {
     }
 }
 
-// The largest power of two less than or equal to `n`, used in Hasher::update(). This is similar to
-// left_subtree_len(n), but note that left_subtree_len(n) is strictly less than `n`.
+// The largest power of two less than or equal to `n`, used for left_len()
+// immediately below, and also directly in Hasher::update().
 fn largest_power_of_two_leq(n: usize) -> usize {
     ((n / 2) + 1).next_power_of_two()
+}
+
+// Given some input larger than one chunk, return the number of bytes that
+// should go in the left subtree. This is the largest power-of-2 number of
+// chunks that leaves at least 1 byte for the right subtree.
+fn left_len(content_len: usize) -> usize {
+    debug_assert!(content_len > CHUNK_LEN);
+    // Subtract 1 to reserve at least one byte for the right side.
+    let full_chunks = (content_len - 1) / CHUNK_LEN;
+    largest_power_of_two_leq(full_chunks) * CHUNK_LEN
 }
 
 // Use SIMD parallelism to hash up to MAX_SIMD_DEGREE chunks at the same time
@@ -795,7 +775,7 @@ fn compress_subtree_wide<J: join::Join>(
     // as long as the SIMD degree is a power of 2. If we ever get a SIMD degree
     // of 3 or something, we'll need a more complicated strategy.)
     debug_assert_eq!(platform.simd_degree().count_ones(), 1, "power of 2");
-    let (left, right) = input.split_at(hazmat::left_subtree_len(input.len() as u64) as usize);
+    let (left, right) = input.split_at(left_len(input.len()));
     let right_chunk_counter = chunk_counter + (left.len() / CHUNK_LEN) as u64;
 
     // Make space for the child outputs. Here we use MAX_SIMD_DEGREE_OR_2 to
@@ -1001,8 +981,10 @@ pub fn keyed_hash(key: &[u8; KEY_LEN], input: &[u8]) -> Hash {
 ///
 /// [Argon2]: https://en.wikipedia.org/wiki/Argon2
 pub fn derive_key(context: &str, key_material: &[u8]) -> [u8; OUT_LEN] {
-    let context_key = hazmat::hash_derive_key_context(context);
-    let context_key_words = platform::words_from_le_bytes_32(&context_key);
+    let context_key =
+        hash_all_at_once::<join::SerialJoin>(context.as_bytes(), IV, DERIVE_KEY_CONTEXT)
+            .root_hash();
+    let context_key_words = platform::words_from_le_bytes_32(context_key.as_bytes());
     hash_all_at_once::<join::SerialJoin>(key_material, &context_key_words, DERIVE_KEY_MATERIAL)
         .root_hash()
         .0
@@ -1066,7 +1048,6 @@ fn parent_node_output(
 pub struct Hasher {
     key: CVWords,
     chunk_state: ChunkState,
-    initial_chunk_counter: u64,
     // The stack size is MAX_DEPTH + 1 because we do lazy merging. For example,
     // with 7 chunks, we have 3 entries in the stack. Adding an 8th chunk
     // requires a 4th entry, rather than merging everything down to 1, because
@@ -1080,7 +1061,6 @@ impl Hasher {
         Self {
             key: *key,
             chunk_state: ChunkState::new(key, 0, flags, Platform::detect()),
-            initial_chunk_counter: 0,
             cv_stack: ArrayVec::new(),
         }
     }
@@ -1105,8 +1085,10 @@ impl Hasher {
     ///
     /// [`derive_key`]: fn.derive_key.html
     pub fn new_derive_key(context: &str) -> Self {
-        let context_key = hazmat::hash_derive_key_context(context);
-        let context_key_words = platform::words_from_le_bytes_32(&context_key);
+        let context_key =
+            hash_all_at_once::<join::SerialJoin>(context.as_bytes(), IV, DERIVE_KEY_CONTEXT)
+                .root_hash();
+        let context_key_words = platform::words_from_le_bytes_32(context_key.as_bytes());
         Self::new_internal(&context_key_words, DERIVE_KEY_MATERIAL)
     }
 
@@ -1131,17 +1113,13 @@ impl Hasher {
     // always merging 1 chunk at a time. Instead, each CV might represent any
     // power-of-two number of chunks, as long as the smaller-above-larger stack
     // order is maintained. Instead of the "count the trailing 0-bits"
-    // algorithm described in the spec (which assumes you're adding one chunk
-    // at a time), we use a "count the total number of 1-bits" variant (which
-    // doesn't assume that). The principle is the same: each CV that should
-    // remain in the stack is represented by a 1-bit in the total number of
-    // chunks (or bytes) so far.
-    fn merge_cv_stack(&mut self, chunk_counter: u64) {
-        // Account for non-zero cases of Hasher::set_input_offset, where there are no prior
-        // subtrees in the stack. Note that initial_chunk_counter is always 0 for callers who don't
-        // use the hazmat module.
-        let post_merge_stack_len =
-            (chunk_counter - self.initial_chunk_counter).count_ones() as usize;
+    // algorithm described in the spec, we use a "count the total number of
+    // 1-bits" variant that doesn't require us to retain the subtree size of
+    // the CV on top of the stack. The principle is the same: each CV that
+    // should remain in the stack is represented by a 1-bit in the total number
+    // of chunks (or bytes) so far.
+    fn merge_cv_stack(&mut self, total_len: u64) {
+        let post_merge_stack_len = total_len.count_ones() as usize;
         while self.cv_stack.len() > post_merge_stack_len {
             let right_child = self.cv_stack.pop().unwrap();
             let left_child = self.cv_stack.pop().unwrap();
@@ -1206,21 +1184,10 @@ impl Hasher {
     }
 
     fn update_with_join<J: join::Join>(&mut self, mut input: &[u8]) -> &mut Self {
-        let input_offset = self.initial_chunk_counter * CHUNK_LEN as u64;
-        if let Some(max) = hazmat::max_subtree_len(input_offset) {
-            let remaining = max - self.count();
-            assert!(
-                input.len() as u64 <= remaining,
-                "the subtree starting at {} contains at most {} bytes (found {})",
-                CHUNK_LEN as u64 * self.initial_chunk_counter,
-                max,
-                input.len(),
-            );
-        }
         // If we have some partial chunk bytes in the internal chunk_state, we
         // need to finish that chunk first.
-        if self.chunk_state.count() > 0 {
-            let want = CHUNK_LEN - self.chunk_state.count();
+        if self.chunk_state.len() > 0 {
+            let want = CHUNK_LEN - self.chunk_state.len();
             let take = cmp::min(want, input.len());
             self.chunk_state.update(&input[..take]);
             input = &input[take..];
@@ -1228,7 +1195,7 @@ impl Hasher {
                 // We've filled the current chunk, and there's more input
                 // coming, so we know it's not the root and we can finalize it.
                 // Then we'll proceed to hashing whole chunks below.
-                debug_assert_eq!(self.chunk_state.count(), CHUNK_LEN);
+                debug_assert_eq!(self.chunk_state.len(), CHUNK_LEN);
                 let chunk_cv = self.chunk_state.output().chaining_value();
                 self.push_cv(&chunk_cv, self.chunk_state.chunk_counter);
                 self.chunk_state = ChunkState::new(
@@ -1256,7 +1223,7 @@ impl Hasher {
         // Because we might need to break up the input to form powers of 2, or
         // to evenly divide what we already have, this part runs in a loop.
         while input.len() > CHUNK_LEN {
-            debug_assert_eq!(self.chunk_state.count(), 0, "no partial chunk data");
+            debug_assert_eq!(self.chunk_state.len(), 0, "no partial chunk data");
             debug_assert_eq!(CHUNK_LEN.count_ones(), 1, "power of 2 chunk len");
             let mut subtree_len = largest_power_of_two_leq(input.len());
             let count_so_far = self.chunk_state.chunk_counter * CHUNK_LEN as u64;
@@ -1341,7 +1308,7 @@ impl Hasher {
         // also. Convert it directly into an Output. Otherwise, we need to
         // merge subtrees below.
         if self.cv_stack.is_empty() {
-            debug_assert_eq!(self.chunk_state.chunk_counter, self.initial_chunk_counter);
+            debug_assert_eq!(self.chunk_state.chunk_counter, 0);
             return self.chunk_state.output();
         }
 
@@ -1359,11 +1326,11 @@ impl Hasher {
         // the empty chunk is taken care of above.
         let mut output: Output;
         let mut num_cvs_remaining = self.cv_stack.len();
-        if self.chunk_state.count() > 0 {
+        if self.chunk_state.len() > 0 {
             debug_assert_eq!(
                 self.cv_stack.len(),
-                (self.chunk_state.chunk_counter - self.initial_chunk_counter).count_ones() as usize,
-                "cv stack does not need a merge",
+                self.chunk_state.chunk_counter.count_ones() as usize,
+                "cv stack does not need a merge"
             );
             output = self.chunk_state.output();
         } else {
@@ -1396,10 +1363,6 @@ impl Hasher {
     /// This method is idempotent. Calling it twice will give the same result.
     /// You can also add more input and finalize again.
     pub fn finalize(&self) -> Hash {
-        assert_eq!(
-            self.initial_chunk_counter, 0,
-            "set_input_offset must be used with finalize_non_root",
-        );
         self.final_output().root_hash()
     }
 
@@ -1411,22 +1374,12 @@ impl Hasher {
     ///
     /// [`OutputReader`]: struct.OutputReader.html
     pub fn finalize_xof(&self) -> OutputReader {
-        assert_eq!(
-            self.initial_chunk_counter, 0,
-            "set_input_offset must be used with finalize_non_root",
-        );
         OutputReader::new(self.final_output())
     }
 
     /// Return the total number of bytes hashed so far.
-    ///
-    /// [`hazmat::HasherExt::set_input_offset`] does not affect this value. This only counts bytes
-    /// passed to [`update`](Hasher::update).
     pub fn count(&self) -> u64 {
-        // Account for non-zero cases of Hasher::set_input_offset. Note that initial_chunk_counter
-        // is always 0 for callers who don't use the hazmat module.
-        (self.chunk_state.chunk_counter - self.initial_chunk_counter) * CHUNK_LEN as u64
-            + self.chunk_state.count() as u64
+        self.chunk_state.chunk_counter * CHUNK_LEN as u64 + self.chunk_state.len() as u64
     }
 
     /// As [`update`](Hasher::update), but reading from a
@@ -1645,13 +1598,11 @@ impl Zeroize for Hasher {
         let Self {
             key,
             chunk_state,
-            initial_chunk_counter,
             cv_stack,
         } = self;
 
         key.zeroize();
         chunk_state.zeroize();
-        initial_chunk_counter.zeroize();
         cv_stack.zeroize();
     }
 }
@@ -1718,7 +1669,7 @@ impl OutputReader {
     /// calling `fill` repeatedly with a short-length or odd-length slice will
     /// end up performing the same compression multiple times. If you're
     /// reading output in a loop, prefer a slice length that's a multiple of
-    /// [`BLOCK_LEN`] (64 bytes).
+    /// 64.
     ///
     /// The maximum output size of BLAKE3 is 2<sup>64</sup>-1 bytes. If you try
     /// to extract more than that, for example by seeking near the end and

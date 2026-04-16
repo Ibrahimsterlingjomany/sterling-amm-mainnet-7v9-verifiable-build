@@ -1,5 +1,7 @@
 //! Extensions available to token mints and accounts
 
+#[cfg(feature = "serde-traits")]
+use serde::{Deserialize, Serialize};
 use {
     crate::{
         error::TokenError,
@@ -10,6 +12,8 @@ use {
             },
             cpi_guard::CpiGuard,
             default_account_state::DefaultAccountState,
+            group_member_pointer::GroupMemberPointer,
+            group_pointer::GroupPointer,
             immutable_owner::ImmutableOwner,
             interest_bearing_mint::InterestBearingConfig,
             memo_transfer::MemoTransfer,
@@ -33,6 +37,7 @@ use {
         bytemuck::{pod_from_bytes, pod_from_bytes_mut, pod_get_packed_len},
         primitives::PodU16,
     },
+    spl_token_group_interface::state::{TokenGroup, TokenGroupMember},
     spl_type_length_value::variable_len_pack::VariableLenPack,
     std::{
         cmp::Ordering,
@@ -40,9 +45,6 @@ use {
         mem::size_of,
     },
 };
-
-#[cfg(feature = "serde-traits")]
-use serde::{Deserialize, Serialize};
 
 /// Confidential Transfer extension
 pub mod confidential_transfer;
@@ -52,6 +54,10 @@ pub mod confidential_transfer_fee;
 pub mod cpi_guard;
 /// Default Account State extension
 pub mod default_account_state;
+/// Group Member Pointer extension
+pub mod group_member_pointer;
+/// Group Pointer extension
+pub mod group_pointer;
 /// Immutable Owner extension
 pub mod immutable_owner;
 /// Interest-Bearing Mint extension
@@ -68,6 +74,8 @@ pub mod non_transferable;
 pub mod permanent_delegate;
 /// Utility to reallocate token accounts
 pub mod reallocate;
+/// Token-group extension
+pub mod token_group;
 /// Token-metadata extension
 pub mod token_metadata;
 /// Transfer Fee extension
@@ -168,7 +176,8 @@ fn get_extension_indices<V: Extension>(
     Err(ProgramError::InvalidAccountData)
 }
 
-/// Basic information about the TLV buffer, collected from iterating through all entries
+/// Basic information about the TLV buffer, collected from iterating through all
+/// entries
 #[derive(Debug, PartialEq)]
 struct TlvDataInfo {
     /// The extension types written in the TLV buffer
@@ -270,8 +279,9 @@ fn check_account_type<S: BaseState>(account_type: AccountType) -> Result<(), Pro
 ///                          ^     ^       ^     ^
 ///                     acct type  extension length data...
 ///
-/// Mint: 82 bytes... + 83 bytes of other extension data + [2, 0, 3, 0, 100, ....]
-///                                                         ^ data in extension just happens to look like this
+/// Mint: 82 bytes... + 83 bytes of other extension data
+///     + [2, 0, 3, 0, 100, ....]
+///      (data in extension just happens to look like this)
 ///
 /// With this approach, we only start writing the TLV data after Account::LEN,
 /// which means we always know that the account type is going to be right after
@@ -302,7 +312,8 @@ fn type_and_tlv_indices<S: BaseState>(
     }
 }
 
-/// Checks a base buffer to verify if it is an Account without having to completely deserialize it
+/// Checks a base buffer to verify if it is an Account without having to
+/// completely deserialize it
 fn is_initialized_account(input: &[u8]) -> Result<bool, ProgramError> {
     const ACCOUNT_INITIALIZED_INDEX: usize = 108; // See state.rs#L99
 
@@ -321,7 +332,8 @@ fn get_extension_bytes<S: BaseState, V: Extension>(tlv_data: &[u8]) -> Result<&[
         length_start,
         value_start,
     } = get_extension_indices::<V>(tlv_data, false)?;
-    // get_extension_indices has checked that tlv_data is long enough to include these indices
+    // get_extension_indices has checked that tlv_data is long enough to include
+    // these indices
     let length = pod_from_bytes::<Length>(&tlv_data[length_start..value_start])?;
     let value_end = value_start.saturating_add(usize::from(*length));
     if tlv_data.len() < value_end {
@@ -341,13 +353,41 @@ fn get_extension_bytes_mut<S: BaseState, V: Extension>(
         length_start,
         value_start,
     } = get_extension_indices::<V>(tlv_data, false)?;
-    // get_extension_indices has checked that tlv_data is long enough to include these indices
+    // get_extension_indices has checked that tlv_data is long enough to include
+    // these indices
     let length = pod_from_bytes::<Length>(&tlv_data[length_start..value_start])?;
     let value_end = value_start.saturating_add(usize::from(*length));
     if tlv_data.len() < value_end {
         return Err(ProgramError::InvalidAccountData);
     }
     Ok(&mut tlv_data[value_start..value_end])
+}
+
+/// Calculate the new expected size if the state allocates the given number
+/// of bytes for the given extension type.
+///
+/// Provides the correct answer regardless if the extension is already present
+/// in the TLV data.
+fn try_get_new_account_len_for_extension_len<S: BaseState, V: Extension>(
+    tlv_data: &[u8],
+    new_extension_len: usize,
+) -> Result<usize, ProgramError> {
+    // get the new length used by the extension
+    let new_extension_tlv_len = add_type_and_length_to_len(new_extension_len);
+    let tlv_info = get_tlv_data_info(tlv_data)?;
+    // If we're adding an extension, then we must have at least BASE_ACCOUNT_LENGTH
+    // and account type
+    let current_len = tlv_info
+        .used_len
+        .saturating_add(BASE_ACCOUNT_AND_TYPE_LENGTH);
+    // get the current length used by the extension
+    let current_extension_len = get_extension_bytes::<S, V>(tlv_data)
+        .map(|x| add_type_and_length_to_len(x.len()))
+        .unwrap_or(0);
+    let new_len = current_len
+        .saturating_sub(current_extension_len)
+        .saturating_add(new_extension_tlv_len);
+    Ok(adjust_len_for_multisig(new_len))
 }
 
 /// Trait for base state with extension
@@ -395,41 +435,32 @@ pub trait BaseStateWithExtensions<S: BaseState> {
             Ok(adjust_len_for_multisig(total_len))
         }
     }
+    /// Calculate the new expected size if the state allocates the given
+    /// fixed-length extension instance.
+    /// If the state already has the extension, the resulting account length
+    /// will be unchanged.
+    fn try_get_new_account_len<V: Extension + Pod>(&self) -> Result<usize, ProgramError> {
+        try_get_new_account_len_for_extension_len::<S, V>(
+            self.get_tlv_data(),
+            pod_get_packed_len::<V>(),
+        )
+    }
 
-    /// Calculate the new expected size if the state allocates the given number
-    /// of bytes for the given extension type.
-    ///
-    /// Provides the correct answer regardless if the extension is already present
-    /// in the TLV data.
-    fn try_get_new_account_len<V: Extension + VariableLenPack>(
+    /// Calculate the new expected size if the state allocates the given
+    /// variable-length extension instance.
+    fn try_get_new_account_len_for_variable_len_extension<V: Extension + VariableLenPack>(
         &self,
         new_extension: &V,
     ) -> Result<usize, ProgramError> {
-        // get the new length used by the extension
-        let new_extension_len = add_type_and_length_to_len(new_extension.get_packed_len()?);
-        let tlv_info = get_tlv_data_info(self.get_tlv_data())?;
-        // If we're adding an extension, then we must have at least BASE_ACCOUNT_LENGTH
-        // and account type
-        let current_len = tlv_info
-            .used_len
-            .saturating_add(BASE_ACCOUNT_AND_TYPE_LENGTH);
-        let new_len = if tlv_info.extension_types.is_empty() {
-            current_len.saturating_add(new_extension_len)
-        } else {
-            // get the current length used by the extension
-            let current_extension_len = self
-                .get_extension_bytes::<V>()
-                .map(|x| add_type_and_length_to_len(x.len()))
-                .unwrap_or(0);
-            current_len
-                .saturating_sub(current_extension_len)
-                .saturating_add(new_extension_len)
-        };
-        Ok(adjust_len_for_multisig(new_len))
+        try_get_new_account_len_for_extension_len::<S, V>(
+            self.get_tlv_data(),
+            new_extension.get_packed_len()?,
+        )
     }
 }
 
-/// Encapsulates owned immutable base state data (mint or account) with possible extensions
+/// Encapsulates owned immutable base state data (mint or account) with possible
+/// extensions
 #[derive(Clone, Debug, PartialEq)]
 pub struct StateWithExtensionsOwned<S: BaseState> {
     /// Unpacked base data
@@ -467,7 +498,8 @@ impl<S: BaseState> BaseStateWithExtensions<S> for StateWithExtensionsOwned<S> {
     }
 }
 
-/// Encapsulates immutable base state data (mint or account) with possible extensions
+/// Encapsulates immutable base state data (mint or account) with possible
+/// extensions
 #[derive(Debug, PartialEq)]
 pub struct StateWithExtensions<'data, S: BaseState> {
     /// Unpacked base data
@@ -506,7 +538,8 @@ impl<'a, S: BaseState> BaseStateWithExtensions<S> for StateWithExtensions<'a, S>
     }
 }
 
-/// Encapsulates mutable base state data (mint or account) with possible extensions
+/// Encapsulates mutable base state data (mint or account) with possible
+/// extensions
 #[derive(Debug, PartialEq)]
 pub struct StateWithExtensionsMut<'data, S: BaseState> {
     /// Unpacked base data
@@ -548,7 +581,8 @@ impl<'data, S: BaseState> StateWithExtensionsMut<'data, S> {
         }
     }
 
-    /// Unpack an uninitialized base state, leaving the extension data as a mutable slice
+    /// Unpack an uninitialized base state, leaving the extension data as a
+    /// mutable slice
     ///
     /// Fails if the base state has already been initialized.
     pub fn unpack_uninitialized(input: &'data mut [u8]) -> Result<Self, ProgramError> {
@@ -594,13 +628,14 @@ impl<'data, S: BaseState> StateWithExtensionsMut<'data, S> {
         get_extension_bytes_mut::<S, V>(self.tlv_data)
     }
 
-    /// Unpack a portion of the TLV data as the desired type that allows modifying the type
+    /// Unpack a portion of the TLV data as the desired type that allows
+    /// modifying the type
     pub fn get_extension_mut<V: Extension + Pod>(&mut self) -> Result<&mut V, ProgramError> {
         pod_from_bytes_mut::<V>(self.get_extension_bytes_mut::<V>()?)
     }
 
-    /// Packs a variable-length extension into its appropriate data segment. Fails
-    /// if space hasn't already been allocated for the given extension
+    /// Packs a variable-length extension into its appropriate data segment.
+    /// Fails if space hasn't already been allocated for the given extension
     pub fn pack_variable_len_extension<V: Extension + VariableLenPack>(
         &mut self,
         extension: &V,
@@ -616,10 +651,11 @@ impl<'data, S: BaseState> StateWithExtensionsMut<'data, S> {
         S::pack_into_slice(&self.base, self.base_data);
     }
 
-    /// Packs the default extension data into an open slot if not already found in the
-    /// data buffer. If extension is already found in the buffer, it overwrites the existing
-    /// extension with the default state if `overwrite` is set. If extension found, but
-    /// `overwrite` is not set, it returns error.
+    /// Packs the default extension data into an open slot if not already found
+    /// in the data buffer. If extension is already found in the buffer, it
+    /// overwrites the existing extension with the default state if
+    /// `overwrite` is set. If extension found, but `overwrite` is not set,
+    /// it returns error.
     pub fn init_extension<V: Extension + Pod + Default>(
         &mut self,
         overwrite: bool,
@@ -634,8 +670,8 @@ impl<'data, S: BaseState> StateWithExtensionsMut<'data, S> {
     /// Reallocate and overwite the TLV entry for the given variable-length
     /// extension.
     ///
-    /// Returns an error if the extension is not present, or if there is not enough
-    /// space in the buffer.
+    /// Returns an error if the extension is not present, or if there is not
+    /// enough space in the buffer.
     pub fn realloc_variable_len_extension<V: Extension + VariableLenPack>(
         &mut self,
         new_extension: &V,
@@ -644,14 +680,15 @@ impl<'data, S: BaseState> StateWithExtensionsMut<'data, S> {
         new_extension.pack_into_slice(data)
     }
 
-    /// Reallocate the TLV entry for the given extension to the given number of bytes.
+    /// Reallocate the TLV entry for the given extension to the given number of
+    /// bytes.
     ///
-    /// If the new length is smaller, it will compact the rest of the buffer and zero out
-    /// the difference at the end. If it's larger, it will move the rest of
-    /// the buffer data and zero out the new data.
+    /// If the new length is smaller, it will compact the rest of the buffer and
+    /// zero out the difference at the end. If it's larger, it will move the
+    /// rest of the buffer data and zero out the new data.
     ///
-    /// Returns an error if the extension is not present, or if this is not enough
-    /// space in the buffer.
+    /// Returns an error if the extension is not present, or if this is not
+    /// enough space in the buffer.
     fn realloc<V: Extension + VariableLenPack>(
         &mut self,
         length: usize,
@@ -700,11 +737,11 @@ impl<'data, S: BaseState> StateWithExtensionsMut<'data, S> {
         Ok(&mut self.tlv_data[value_start..new_value_end])
     }
 
-    /// Allocate the given number of bytes for the given variable-length extension
-    /// and write its contents into the TLV buffer.
+    /// Allocate the given number of bytes for the given variable-length
+    /// extension and write its contents into the TLV buffer.
     ///
-    /// This can only be used for variable-sized types, such as `String` or `Vec`.
-    /// `Pod` types must use `init_extension`
+    /// This can only be used for variable-sized types, such as `String` or
+    /// `Vec`. `Pod` types must use `init_extension`
     pub fn init_variable_len_extension<V: Extension + VariableLenPack>(
         &mut self,
         extension: &V,
@@ -758,10 +795,12 @@ impl<'data, S: BaseState> StateWithExtensionsMut<'data, S> {
         }
     }
 
-    /// If `extension_type` is an Account-associated ExtensionType that requires initialization on
-    /// InitializeAccount, this method packs the default relevant Extension of an ExtensionType
-    /// into an open slot if not already found in the data buffer, otherwise overwrites the
-    /// existing extension with the default state. For all other ExtensionTypes, this is a no-op.
+    /// If `extension_type` is an Account-associated ExtensionType that requires
+    /// initialization on InitializeAccount, this method packs the default
+    /// relevant Extension of an ExtensionType into an open slot if not
+    /// already found in the data buffer, otherwise overwrites the
+    /// existing extension with the default state. For all other ExtensionTypes,
+    /// this is a no-op.
     pub fn init_account_extension_from_type(
         &mut self,
         extension_type: ExtensionType,
@@ -815,7 +854,8 @@ impl<'a, S: BaseState> BaseStateWithExtensions<S> for StateWithExtensionsMut<'a,
 
 /// If AccountType is uninitialized, set it to the BaseState's ACCOUNT_TYPE;
 /// if AccountType is already set, check is set correctly for BaseState
-/// This method assumes that the `base_data` has already been packed with data of the desired type.
+/// This method assumes that the `base_data` has already been packed with data
+/// of the desired type.
 pub fn set_account_type<S: BaseState>(input: &mut [u8]) -> Result<(), ProgramError> {
     check_min_len_and_not_multisig(input, S::LEN)?;
     let (base_data, rest) = input.split_at_mut(S::LEN);
@@ -836,10 +876,10 @@ pub fn set_account_type<S: BaseState>(input: &mut [u8]) -> Result<(), ProgramErr
     }
 }
 
-/// Different kinds of accounts. Note that `Mint`, `Account`, and `Multisig` types
-/// are determined exclusively by the size of the account, and are not included in
-/// the account data. `AccountType` is only included if extensions have been
-/// initialized.
+/// Different kinds of accounts. Note that `Mint`, `Account`, and `Multisig`
+/// types are determined exclusively by the size of the account, and are not
+/// included in the account data. `AccountType` is only included if extensions
+/// have been initialized.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, TryFromPrimitive, IntoPrimitive)]
 pub enum AccountType {
@@ -856,17 +896,19 @@ impl Default for AccountType {
     }
 }
 
-/// Extensions that can be applied to mints or accounts.  Mint extensions must only be
-/// applied to mint accounts, and account extensions must only be applied to token holding
-/// accounts.
+/// Extensions that can be applied to mints or accounts.  Mint extensions must
+/// only be applied to mint accounts, and account extensions must only be
+/// applied to token holding accounts.
 #[repr(u16)]
 #[cfg_attr(feature = "serde-traits", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde-traits", serde(rename_all = "camelCase"))]
 #[derive(Clone, Copy, Debug, PartialEq, TryFromPrimitive, IntoPrimitive)]
 pub enum ExtensionType {
-    /// Used as padding if the account size would otherwise be 355, same as a multisig
+    /// Used as padding if the account size would otherwise be 355, same as a
+    /// multisig
     Uninitialized,
-    /// Includes transfer fee rate info and accompanying authorities to withdraw and set the fee
+    /// Includes transfer fee rate info and accompanying authorities to withdraw
+    /// and set the fee
     TransferFeeConfig,
     /// Includes withheld transfer fees
     TransferFeeAmount,
@@ -890,27 +932,44 @@ pub enum ExtensionType {
     CpiGuard,
     /// Includes an optional permanent delegate
     PermanentDelegate,
-    /// Indicates that the tokens in this account belong to a non-transferable mint
+    /// Indicates that the tokens in this account belong to a non-transferable
+    /// mint
     NonTransferableAccount,
-    /// Mint requires a CPI to a program implementing the "transfer hook" interface
+    /// Mint requires a CPI to a program implementing the "transfer hook"
+    /// interface
     TransferHook,
-    /// Indicates that the tokens in this account belong to a mint with a transfer hook
+    /// Indicates that the tokens in this account belong to a mint with a
+    /// transfer hook
     TransferHookAccount,
-    /// Includes encrypted withheld fees and the encryption public that they are encrypted under
+    /// Includes encrypted withheld fees and the encryption public that they are
+    /// encrypted under
     ConfidentialTransferFeeConfig,
     /// Includes confidential withheld transfer fees
     ConfidentialTransferFeeAmount,
-    /// Mint contains a pointer to another account (or the same account) that holds metadata
+    /// Mint contains a pointer to another account (or the same account) that
+    /// holds metadata
     MetadataPointer,
     /// Mint contains token-metadata
     TokenMetadata,
+    /// Mint contains a pointer to another account (or the same account) that
+    /// holds group configurations
+    GroupPointer,
+    /// Mint contains token group configurations
+    TokenGroup,
+    /// Mint contains a pointer to another account (or the same account) that
+    /// holds group member configurations
+    GroupMemberPointer,
+    /// Mint contains token group member configurations
+    TokenGroupMember,
     /// Test variable-length mint extension
     #[cfg(test)]
     VariableLenMintTest = u16::MAX - 2,
-    /// Padding extension used to make an account exactly Multisig::LEN, used for testing
+    /// Padding extension used to make an account exactly Multisig::LEN, used
+    /// for testing
     #[cfg(test)]
     AccountPaddingTest,
-    /// Padding extension used to make a mint exactly Multisig::LEN, used for testing
+    /// Padding extension used to make a mint exactly Multisig::LEN, used for
+    /// testing
     #[cfg(test)]
     MintPaddingTest,
 }
@@ -978,6 +1037,10 @@ impl ExtensionType {
             }
             ExtensionType::MetadataPointer => pod_get_packed_len::<MetadataPointer>(),
             ExtensionType::TokenMetadata => unreachable!(),
+            ExtensionType::GroupPointer => pod_get_packed_len::<GroupPointer>(),
+            ExtensionType::TokenGroup => pod_get_packed_len::<TokenGroup>(),
+            ExtensionType::GroupMemberPointer => pod_get_packed_len::<GroupMemberPointer>(),
+            ExtensionType::TokenGroupMember => pod_get_packed_len::<TokenGroupMember>(),
             #[cfg(test)]
             ExtensionType::AccountPaddingTest => pod_get_packed_len::<AccountPaddingTest>(),
             #[cfg(test)]
@@ -1037,7 +1100,11 @@ impl ExtensionType {
             | ExtensionType::TransferHook
             | ExtensionType::ConfidentialTransferFeeConfig
             | ExtensionType::MetadataPointer
-            | ExtensionType::TokenMetadata => AccountType::Mint,
+            | ExtensionType::TokenMetadata
+            | ExtensionType::GroupPointer
+            | ExtensionType::TokenGroup
+            | ExtensionType::GroupMemberPointer
+            | ExtensionType::TokenGroupMember => AccountType::Mint,
             ExtensionType::ImmutableOwner
             | ExtensionType::TransferFeeAmount
             | ExtensionType::ConfidentialTransferAccount
@@ -1055,8 +1122,8 @@ impl ExtensionType {
         }
     }
 
-    /// Based on a set of AccountType::Mint ExtensionTypes, get the list of AccountType::Account
-    /// ExtensionTypes required on InitializeAccount
+    /// Based on a set of AccountType::Mint ExtensionTypes, get the list of
+    /// AccountType::Account ExtensionTypes required on InitializeAccount
     pub fn get_required_init_account_extensions(mint_extension_types: &[Self]) -> Vec<Self> {
         let mut account_extension_types = vec![];
         for extension_type in mint_extension_types {
@@ -1170,6 +1237,49 @@ impl Extension for AccountPaddingTest {
     const TYPE: ExtensionType = ExtensionType::AccountPaddingTest;
 }
 
+/// Packs a fixed-length extension into a TLV space
+///
+/// This function reallocates the account as needed to accommodate for the
+/// change in space.
+///
+/// If the extension already exists, it will overwrite the existing extension
+/// if `overwrite` is `true`, otherwise it will return an error.
+///
+/// If the extension does not exist, it will reallocate the account and write
+/// the extension into the TLV buffer.
+///
+/// NOTE: Since this function deals with fixed-size extensions, it does not
+/// handle _decreasing_ the size of an account's data buffer, like the function
+/// `alloc_and_serialize_variable_len_extension` does.
+pub fn alloc_and_serialize<S: BaseState, V: Default + Extension + Pod>(
+    account_info: &AccountInfo,
+    new_extension: &V,
+    overwrite: bool,
+) -> Result<(), ProgramError> {
+    let previous_account_len = account_info.try_data_len()?;
+    let new_account_len = {
+        let data = account_info.try_borrow_data()?;
+        let state = StateWithExtensions::<S>::unpack(&data)?;
+        state.try_get_new_account_len::<V>()?
+    };
+
+    // Realloc the account first, if needed
+    if new_account_len > previous_account_len {
+        account_info.realloc(new_account_len, false)?;
+    }
+    let mut buffer = account_info.try_borrow_mut_data()?;
+    if previous_account_len <= BASE_ACCOUNT_LENGTH {
+        set_account_type::<S>(*buffer)?;
+    }
+    let mut state = StateWithExtensionsMut::<S>::unpack(&mut buffer)?;
+
+    // Write the extension
+    let extension = state.init_extension::<V>(overwrite)?;
+    *extension = *new_extension;
+
+    Ok(())
+}
+
 /// Packs a variable-length extension into a TLV space
 ///
 /// This function reallocates the account as needed to accommodate for the
@@ -1178,7 +1288,7 @@ impl Extension for AccountPaddingTest {
 ///
 /// NOTE: Unlike the `reallocate` instruction, this function will reduce the
 /// size of an account if it has too many bytes allocated for the given value.
-pub fn alloc_and_serialize<S: BaseState, V: Extension + VariableLenPack>(
+pub fn alloc_and_serialize_variable_len_extension<S: BaseState, V: Extension + VariableLenPack>(
     account_info: &AccountInfo,
     new_extension: &V,
     overwrite: bool,
@@ -1187,7 +1297,8 @@ pub fn alloc_and_serialize<S: BaseState, V: Extension + VariableLenPack>(
     let (new_account_len, extension_already_exists) = {
         let data = account_info.try_borrow_data()?;
         let state = StateWithExtensions::<S>::unpack(&data)?;
-        let new_account_len = state.try_get_new_account_len(new_extension)?;
+        let new_account_len =
+            state.try_get_new_account_len_for_variable_len_extension(new_extension)?;
         let extension_already_exists = state.get_extension_bytes::<V>().is_ok();
         (new_account_len, extension_already_exists)
     };
@@ -1197,7 +1308,8 @@ pub fn alloc_and_serialize<S: BaseState, V: Extension + VariableLenPack>(
     }
 
     if previous_account_len < new_account_len {
-        // account size increased, so realloc the account, then the TLV entry, then write data
+        // account size increased, so realloc the account, then the TLV entry, then
+        // write data
         account_info.realloc(new_account_len, false)?;
         let mut buffer = account_info.try_borrow_mut_data()?;
         if extension_already_exists {
@@ -1239,6 +1351,7 @@ mod test {
     use {
         super::*,
         crate::state::test::{TEST_ACCOUNT, TEST_ACCOUNT_SLICE, TEST_MINT, TEST_MINT_SLICE},
+        bytemuck::Pod,
         solana_program::{
             account_info::{Account as GetAccount, IntoAccountInfo},
             clock::Epoch,
@@ -1250,6 +1363,16 @@ mod test {
         },
         transfer_fee::test::test_transfer_fee_config,
     };
+
+    /// Test fixed-length struct
+    #[repr(C)]
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
+    struct FixedLenMintTest {
+        data: [u8; 8],
+    }
+    impl Extension for FixedLenMintTest {
+        const TYPE: ExtensionType = ExtensionType::MintPaddingTest;
+    }
 
     /// Test variable-length struct
     #[derive(Clone, Debug, PartialEq)]
@@ -1521,7 +1644,7 @@ mod test {
         state.pack_base();
 
         // check unpacking
-        let mut unpacked_extension = state.get_extension_mut::<MintCloseAuthority>().unwrap();
+        let unpacked_extension = state.get_extension_mut::<MintCloseAuthority>().unwrap();
         assert_eq!(*unpacked_extension, MintCloseAuthority { close_authority });
 
         // update extension
@@ -1790,7 +1913,7 @@ mod test {
         state.pack_base();
 
         // check unpacking
-        let mut unpacked_extension = state.get_extension_mut::<TransferFeeAmount>().unwrap();
+        let unpacked_extension = state.get_extension_mut::<TransferFeeAmount>().unwrap();
         assert_eq!(*unpacked_extension, TransferFeeAmount { withheld_amount });
 
         // update extension
@@ -2274,7 +2397,9 @@ mod test {
         let current_len = state.try_get_account_len().unwrap();
         assert_eq!(current_len, Mint::LEN);
         let new_len = state
-            .try_get_new_account_len::<VariableLenMintTest>(&variable_len)
+            .try_get_new_account_len_for_variable_len_extension::<VariableLenMintTest>(
+                &variable_len,
+            )
             .unwrap();
         assert_eq!(
             new_len,
@@ -2289,19 +2414,25 @@ mod test {
 
         // Reduce the extension size
         let new_len = state
-            .try_get_new_account_len::<VariableLenMintTest>(&small_variable_len)
+            .try_get_new_account_len_for_variable_len_extension::<VariableLenMintTest>(
+                &small_variable_len,
+            )
             .unwrap();
         assert_eq!(current_len.checked_sub(new_len).unwrap(), 1);
 
         // Increase the extension size
         let new_len = state
-            .try_get_new_account_len::<VariableLenMintTest>(&big_variable_len)
+            .try_get_new_account_len_for_variable_len_extension::<VariableLenMintTest>(
+                &big_variable_len,
+            )
             .unwrap();
         assert_eq!(new_len.checked_sub(current_len).unwrap(), 1);
 
         // Maintain the extension size
         let new_len = state
-            .try_get_new_account_len::<VariableLenMintTest>(&variable_len)
+            .try_get_new_account_len_for_variable_len_extension::<VariableLenMintTest>(
+                &variable_len,
+            )
             .unwrap();
         assert_eq!(new_len, current_len);
     }
@@ -2361,7 +2492,44 @@ mod test {
     }
 
     #[test]
-    fn alloc_new_tlv_in_account_info_from_base_size() {
+    fn alloc_new_fixed_len_tlv_in_account_info_from_base_size() {
+        let fixed_len = FixedLenMintTest {
+            data: [1, 2, 3, 4, 5, 6, 7, 8],
+        };
+        let value_len = pod_get_packed_len::<FixedLenMintTest>();
+        let base_account_size = Mint::LEN;
+        let mut buffer = vec![0; base_account_size];
+        let mut state = StateWithExtensionsMut::<Mint>::unpack_uninitialized(&mut buffer).unwrap();
+        state.base = TEST_MINT;
+        state.pack_base();
+
+        let mut data = SolanaAccountData::new(&buffer);
+        let key = Pubkey::new_unique();
+        let account_info = (&key, &mut data).into_account_info();
+
+        alloc_and_serialize::<Mint, _>(&account_info, &fixed_len, false).unwrap();
+        let new_account_len = BASE_ACCOUNT_AND_TYPE_LENGTH + add_type_and_length_to_len(value_len);
+        assert_eq!(data.len(), new_account_len);
+        let state = StateWithExtensions::<Mint>::unpack(data.data()).unwrap();
+        assert_eq!(
+            state.get_extension::<FixedLenMintTest>().unwrap(),
+            &fixed_len,
+        );
+
+        // alloc again succeeds with "overwrite"
+        let account_info = (&key, &mut data).into_account_info();
+        alloc_and_serialize::<Mint, _>(&account_info, &fixed_len, true).unwrap();
+
+        // alloc again fails without "overwrite"
+        let account_info = (&key, &mut data).into_account_info();
+        assert_eq!(
+            alloc_and_serialize::<Mint, _>(&account_info, &fixed_len, false).unwrap_err(),
+            TokenError::ExtensionAlreadyInitialized.into()
+        );
+    }
+
+    #[test]
+    fn alloc_new_variable_len_tlv_in_account_info_from_base_size() {
         let variable_len = VariableLenMintTest { data: vec![20, 99] };
         let value_len = variable_len.get_packed_len().unwrap();
         let base_account_size = Mint::LEN;
@@ -2374,7 +2542,8 @@ mod test {
         let key = Pubkey::new_unique();
         let account_info = (&key, &mut data).into_account_info();
 
-        alloc_and_serialize::<Mint, _>(&account_info, &variable_len, false).unwrap();
+        alloc_and_serialize_variable_len_extension::<Mint, _>(&account_info, &variable_len, false)
+            .unwrap();
         let new_account_len = BASE_ACCOUNT_AND_TYPE_LENGTH + add_type_and_length_to_len(value_len);
         assert_eq!(data.len(), new_account_len);
         let state = StateWithExtensions::<Mint>::unpack(data.data()).unwrap();
@@ -2387,18 +2556,76 @@ mod test {
 
         // alloc again succeeds with "overwrite"
         let account_info = (&key, &mut data).into_account_info();
-        alloc_and_serialize::<Mint, _>(&account_info, &variable_len, true).unwrap();
+        alloc_and_serialize_variable_len_extension::<Mint, _>(&account_info, &variable_len, true)
+            .unwrap();
 
         // alloc again fails without "overwrite"
         let account_info = (&key, &mut data).into_account_info();
         assert_eq!(
-            alloc_and_serialize::<Mint, _>(&account_info, &variable_len, false).unwrap_err(),
+            alloc_and_serialize_variable_len_extension::<Mint, _>(
+                &account_info,
+                &variable_len,
+                false,
+            )
+            .unwrap_err(),
             TokenError::ExtensionAlreadyInitialized.into()
         );
     }
 
     #[test]
-    fn alloc_new_tlv_in_account_info_from_extended_size() {
+    fn alloc_new_fixed_len_tlv_in_account_info_from_extended_size() {
+        let fixed_len = FixedLenMintTest {
+            data: [1, 2, 3, 4, 5, 6, 7, 8],
+        };
+        let value_len = pod_get_packed_len::<FixedLenMintTest>();
+        let account_size =
+            ExtensionType::try_calculate_account_len::<Mint>(&[ExtensionType::GroupPointer])
+                .unwrap()
+                + add_type_and_length_to_len(value_len);
+        let mut buffer = vec![0; account_size];
+        let mut state = StateWithExtensionsMut::<Mint>::unpack_uninitialized(&mut buffer).unwrap();
+        state.base = TEST_MINT;
+        state.pack_base();
+        state.init_account_type().unwrap();
+
+        let test_key =
+            OptionalNonZeroPubkey::try_from(Some(Pubkey::new_from_array([20; 32]))).unwrap();
+        let extension = state.init_extension::<GroupPointer>(false).unwrap();
+        extension.authority = test_key;
+        extension.group_address = test_key;
+
+        let mut data = SolanaAccountData::new(&buffer);
+        let key = Pubkey::new_unique();
+        let account_info = (&key, &mut data).into_account_info();
+
+        alloc_and_serialize::<Mint, _>(&account_info, &fixed_len, false).unwrap();
+        let new_account_len = BASE_ACCOUNT_AND_TYPE_LENGTH
+            + add_type_and_length_to_len(value_len)
+            + add_type_and_length_to_len(size_of::<GroupPointer>());
+        assert_eq!(data.len(), new_account_len);
+        let state = StateWithExtensions::<Mint>::unpack(data.data()).unwrap();
+        assert_eq!(
+            state.get_extension::<FixedLenMintTest>().unwrap(),
+            &fixed_len,
+        );
+        let extension = state.get_extension::<GroupPointer>().unwrap();
+        assert_eq!(extension.authority, test_key);
+        assert_eq!(extension.group_address, test_key);
+
+        // alloc again succeeds with "overwrite"
+        let account_info = (&key, &mut data).into_account_info();
+        alloc_and_serialize::<Mint, _>(&account_info, &fixed_len, true).unwrap();
+
+        // alloc again fails without "overwrite"
+        let account_info = (&key, &mut data).into_account_info();
+        assert_eq!(
+            alloc_and_serialize::<Mint, _>(&account_info, &fixed_len, false).unwrap_err(),
+            TokenError::ExtensionAlreadyInitialized.into()
+        );
+    }
+
+    #[test]
+    fn alloc_new_variable_len_tlv_in_account_info_from_extended_size() {
         let variable_len = VariableLenMintTest { data: vec![42, 6] };
         let value_len = variable_len.get_packed_len().unwrap();
         let account_size =
@@ -2421,7 +2648,8 @@ mod test {
         let key = Pubkey::new_unique();
         let account_info = (&key, &mut data).into_account_info();
 
-        alloc_and_serialize::<Mint, _>(&account_info, &variable_len, false).unwrap();
+        alloc_and_serialize_variable_len_extension::<Mint, _>(&account_info, &variable_len, false)
+            .unwrap();
         let new_account_len = BASE_ACCOUNT_AND_TYPE_LENGTH
             + add_type_and_length_to_len(value_len)
             + add_type_and_length_to_len(size_of::<MetadataPointer>());
@@ -2439,18 +2667,24 @@ mod test {
 
         // alloc again succeeds with "overwrite"
         let account_info = (&key, &mut data).into_account_info();
-        alloc_and_serialize::<Mint, _>(&account_info, &variable_len, true).unwrap();
+        alloc_and_serialize_variable_len_extension::<Mint, _>(&account_info, &variable_len, true)
+            .unwrap();
 
         // alloc again fails without "overwrite"
         let account_info = (&key, &mut data).into_account_info();
         assert_eq!(
-            alloc_and_serialize::<Mint, _>(&account_info, &variable_len, false).unwrap_err(),
+            alloc_and_serialize_variable_len_extension::<Mint, _>(
+                &account_info,
+                &variable_len,
+                false,
+            )
+            .unwrap_err(),
             TokenError::ExtensionAlreadyInitialized.into()
         );
     }
 
     #[test]
-    fn realloc_tlv_in_account_info() {
+    fn realloc_variable_len_tlv_in_account_info() {
         let variable_len = VariableLenMintTest {
             data: vec![1, 2, 3, 4, 5],
         };
@@ -2480,7 +2714,8 @@ mod test {
         let key = Pubkey::new_unique();
         let account_info = (&key, &mut data).into_account_info();
         let variable_len = VariableLenMintTest { data: vec![1, 2] };
-        alloc_and_serialize::<Mint, _>(&account_info, &variable_len, true).unwrap();
+        alloc_and_serialize_variable_len_extension::<Mint, _>(&account_info, &variable_len, true)
+            .unwrap();
 
         let state = StateWithExtensions::<Mint>::unpack(data.data()).unwrap();
         let extension = state.get_extension::<MetadataPointer>().unwrap();
@@ -2497,7 +2732,8 @@ mod test {
         let variable_len = VariableLenMintTest {
             data: vec![1, 2, 3, 4, 5, 6, 7],
         };
-        alloc_and_serialize::<Mint, _>(&account_info, &variable_len, true).unwrap();
+        alloc_and_serialize_variable_len_extension::<Mint, _>(&account_info, &variable_len, true)
+            .unwrap();
 
         let state = StateWithExtensions::<Mint>::unpack(data.data()).unwrap();
         let extension = state.get_extension::<MetadataPointer>().unwrap();
@@ -2514,7 +2750,8 @@ mod test {
         let variable_len = VariableLenMintTest {
             data: vec![7, 6, 5, 4, 3, 2, 1],
         };
-        alloc_and_serialize::<Mint, _>(&account_info, &variable_len, true).unwrap();
+        alloc_and_serialize_variable_len_extension::<Mint, _>(&account_info, &variable_len, true)
+            .unwrap();
 
         let state = StateWithExtensions::<Mint>::unpack(data.data()).unwrap();
         let extension = state.get_extension::<MetadataPointer>().unwrap();

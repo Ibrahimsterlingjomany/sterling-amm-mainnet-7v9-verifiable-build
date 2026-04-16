@@ -38,12 +38,8 @@ pub const TEST_CASES: &[usize] = &[
     7 * CHUNK_LEN + 1,
     8 * CHUNK_LEN,
     8 * CHUNK_LEN + 1,
-    16 * CHUNK_LEN - 1,
-    16 * CHUNK_LEN, // AVX512's bandwidth
-    16 * CHUNK_LEN + 1,
-    31 * CHUNK_LEN - 1,
-    31 * CHUNK_LEN, // 16 + 8 + 4 + 2 + 1
-    31 * CHUNK_LEN + 1,
+    16 * CHUNK_LEN,  // AVX512's bandwidth
+    31 * CHUNK_LEN,  // 16 + 8 + 4 + 2 + 1
     100 * CHUNK_LEN, // subtrees larger than MAX_SIMD_DEGREE chunks
 ];
 
@@ -332,6 +328,22 @@ fn test_largest_power_of_two_leq() {
 }
 
 #[test]
+fn test_left_len() {
+    let input_output = &[
+        (CHUNK_LEN + 1, CHUNK_LEN),
+        (2 * CHUNK_LEN - 1, CHUNK_LEN),
+        (2 * CHUNK_LEN, CHUNK_LEN),
+        (2 * CHUNK_LEN + 1, 2 * CHUNK_LEN),
+        (4 * CHUNK_LEN - 1, 2 * CHUNK_LEN),
+        (4 * CHUNK_LEN, 2 * CHUNK_LEN),
+        (4 * CHUNK_LEN + 1, 4 * CHUNK_LEN),
+    ];
+    for &(input, output) in input_output {
+        assert_eq!(crate::left_len(input), output);
+    }
+}
+
+#[test]
 fn test_compare_reference_impl() {
     const OUT: usize = 303; // more than 64, not a multiple of 4
     let mut input_buf = [0; TEST_CASES_MAX];
@@ -532,7 +544,7 @@ fn test_fuzz_hasher() {
         let mut total_input = 0;
         // For each test, write 3 inputs of random length.
         for _ in 0..3 {
-            let input_len = rng.random_range(0..(INPUT_MAX + 1));
+            let input_len = rng.gen_range(0..(INPUT_MAX + 1));
             #[cfg(feature = "std")]
             dbg!(input_len);
             let input = &input_buf[total_input..][..input_len];
@@ -561,12 +573,12 @@ fn test_fuzz_xof() {
         dbg!(_num_test);
         // 31 (16 + 8 + 4 + 2 + 1) outputs
         let mut output_buf = [0; 31 * CHUNK_LEN];
-        let input_len = rng.random_range(0..input_buf.len());
+        let input_len = rng.gen_range(0..input_buf.len());
         let mut xof = crate::Hasher::new()
             .update(&input_buf[..input_len])
             .finalize_xof();
-        let partial_start = rng.random_range(0..output_buf.len());
-        let partial_end = rng.random_range(partial_start..output_buf.len());
+        let partial_start = rng.gen_range(0..output_buf.len());
+        let partial_end = rng.gen_range(partial_start..output_buf.len());
         xof.fill(&mut output_buf[..partial_start]);
         xof.fill(&mut output_buf[partial_start..partial_end]);
         xof.fill(&mut output_buf[partial_end..]);
@@ -751,19 +763,6 @@ fn test_hash_conversions() {
     let hex = hash1.to_hex();
     let hash3 = crate::Hash::from_hex(hex.as_bytes()).unwrap();
     assert_eq!(hash1, hash3);
-
-    let slice1: &[u8] = bytes1.as_slice();
-    let hash4 = crate::Hash::from_slice(slice1).expect("correct length");
-    assert_eq!(hash1, hash4);
-
-    let slice2 = hash1.as_slice();
-    assert_eq!(slice1, slice2);
-
-    assert!(crate::Hash::from_slice(&[]).is_err());
-    assert!(crate::Hash::from_slice(&[42]).is_err());
-    assert!(crate::Hash::from_slice([42; 31].as_slice()).is_err());
-    assert!(crate::Hash::from_slice([42; 33].as_slice()).is_err());
-    assert!(crate::Hash::from_slice([42; 100].as_slice()).is_err());
 }
 
 #[test]
@@ -792,7 +791,6 @@ fn test_zeroize() {
             flags: 42,
             platform: crate::Platform::Portable,
         },
-        initial_chunk_counter: 42,
         key: [42; 8],
         cv_stack: [[42; 32]; { crate::MAX_DEPTH + 1 }].into(),
     };
@@ -807,7 +805,6 @@ fn test_zeroize() {
         hasher.chunk_state.platform,
         crate::Platform::Portable
     ));
-    assert_eq!(hasher.initial_chunk_counter, 0);
     assert_eq!(hasher.key, [0; 8]);
     assert_eq!(&*hasher.cv_stack, &[[0u8; 32]; 0]);
 
@@ -985,7 +982,7 @@ fn test_serde() {
     // Version 1.5.2 of this crate changed the default serialization format to a bytestring
     // (instead of an array/list) to save bytes on the wire. That was a backwards compatibility
     // mistake for non-self-describing formats, and it's been reverted. Since some small number of
-    // serialized bytestrings will probably exist forever in the wild, we should test that we can
+    // serialized bytestrings will probably exist forever in the wild, we shold test that we can
     // still deserialize these from self-describing formats.
     let bytestring_cbor: &[u8] = &[
         0x58, 0x20, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe,
@@ -1012,41 +1009,4 @@ fn test_miri_smoketest() {
     let mut reader = hasher.finalize_xof();
     reader.set_position(999999);
     reader.fill(&mut [0]);
-}
-
-// I had to move these tests out of the deprecated guts module, because leaving them there causes
-// an un-silenceable warning: https://github.com/rust-lang/rust/issues/47238
-#[cfg(test)]
-#[allow(deprecated)]
-mod guts_tests {
-    use crate::guts::*;
-
-    #[test]
-    fn test_chunk() {
-        assert_eq!(
-            crate::hash(b"foo"),
-            ChunkState::new(0).update(b"foo").finalize(true)
-        );
-    }
-
-    #[test]
-    fn test_parents() {
-        let mut hasher = crate::Hasher::new();
-        let mut buf = [0; crate::CHUNK_LEN];
-
-        buf[0] = 'a' as u8;
-        hasher.update(&buf);
-        let chunk0_cv = ChunkState::new(0).update(&buf).finalize(false);
-
-        buf[0] = 'b' as u8;
-        hasher.update(&buf);
-        let chunk1_cv = ChunkState::new(1).update(&buf).finalize(false);
-
-        hasher.update(b"c");
-        let chunk2_cv = ChunkState::new(2).update(b"c").finalize(false);
-
-        let parent = parent_cv(&chunk0_cv, &chunk1_cv, false);
-        let root = parent_cv(&parent, &chunk2_cv, true);
-        assert_eq!(hasher.finalize(), root);
-    }
 }

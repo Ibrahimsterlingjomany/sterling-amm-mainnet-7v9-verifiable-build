@@ -1,3 +1,5 @@
+#[cfg(feature = "serde-traits")]
+use serde::{Deserialize, Serialize};
 use {
     crate::{
         check_program_account,
@@ -14,9 +16,6 @@ use {
     spl_pod::optional_keys::OptionalNonZeroPubkey,
     std::convert::TryInto,
 };
-
-#[cfg(feature = "serde-traits")]
-use serde::{Deserialize, Serialize};
 
 /// Interesting-bearing mint extension instructions
 #[cfg_attr(feature = "serde-traits", derive(Serialize, Deserialize))]
@@ -39,7 +38,6 @@ pub enum InterestBearingMintInstruction {
     ///
     /// Data expected by this instruction:
     ///   `crate::extension::interest_bearing::instruction::InitializeInstructionData`
-    ///
     Initialize,
     /// Update the interest rate. Only supported for mints that include the
     /// `InterestBearingConfig` extension.
@@ -57,7 +55,6 @@ pub enum InterestBearingMintInstruction {
     ///
     /// Data expected by this instruction:
     ///   `crate::extension::interest_bearing::BasisPoints`
-    ///
     UpdateRate,
 }
 

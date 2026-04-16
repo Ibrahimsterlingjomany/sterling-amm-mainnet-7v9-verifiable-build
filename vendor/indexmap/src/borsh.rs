@@ -3,6 +3,7 @@
 use alloc::vec::Vec;
 use core::hash::BuildHasher;
 use core::hash::Hash;
+use core::mem::size_of;
 
 use borsh::error::ERROR_ZST_FORBIDDEN;
 use borsh::io::{Error, ErrorKind, Read, Result, Write};
@@ -11,9 +12,6 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use crate::map::IndexMap;
 use crate::set::IndexSet;
 
-// NOTE: the real `#[deprecated]` attribute doesn't work for trait implementations,
-// but we can get close by mimicking the message style for documentation.
-/// <div class="stab deprecated"><span class="emoji">👎</span><span>Deprecated: use borsh's <code>indexmap</code> feature instead.</span></div>
 impl<K, V, S> BorshSerialize for IndexMap<K, V, S>
 where
     K: BorshSerialize,
@@ -38,7 +36,6 @@ where
     }
 }
 
-/// <div class="stab deprecated"><span class="emoji">👎</span><span>Deprecated: use borsh's <code>indexmap</code> feature instead.</span></div>
 impl<K, V, S> BorshDeserialize for IndexMap<K, V, S>
 where
     K: BorshDeserialize + Eq + Hash,
@@ -53,7 +50,6 @@ where
     }
 }
 
-/// <div class="stab deprecated"><span class="emoji">👎</span><span>Deprecated: use borsh's <code>indexmap</code> feature instead.</span></div>
 impl<T, S> BorshSerialize for IndexSet<T, S>
 where
     T: BorshSerialize,
@@ -76,7 +72,6 @@ where
     }
 }
 
-/// <div class="stab deprecated"><span class="emoji">👎</span><span>Deprecated: use borsh's <code>indexmap</code> feature instead.</span></div>
 impl<T, S> BorshDeserialize for IndexSet<T, S>
 where
     T: BorshDeserialize + Eq + Hash,

@@ -3,7 +3,7 @@
 //! all other logic, to be sure that a transfer has accomplished all required
 //! preconditions.
 
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 #![deny(missing_docs)]
 #![cfg_attr(not(test), forbid(unsafe_code))]
 
@@ -12,7 +12,8 @@ pub mod instruction;
 pub mod offchain;
 pub mod onchain;
 
-// Export current sdk types for downstream users building with a different sdk version
+// Export current sdk types for downstream users building with a different sdk
+// version
 pub use solana_program;
 use solana_program::pubkey::Pubkey;
 

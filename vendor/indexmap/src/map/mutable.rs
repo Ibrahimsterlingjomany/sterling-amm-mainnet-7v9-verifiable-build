@@ -1,7 +1,8 @@
 use core::hash::{BuildHasher, Hash};
 
 use super::{
-    Bucket, Entry, Equivalent, IndexMap, IndexedEntry, IterMut2, OccupiedEntry, VacantEntry,
+    Bucket, Entries, Entry, Equivalent, IndexMap, IndexedEntry, IterMut2, OccupiedEntry,
+    VacantEntry,
 };
 
 /// Opt-in mutable access to [`IndexMap`] keys.
@@ -9,7 +10,7 @@ use super::{
 /// These methods expose `&mut K`, mutable references to the key as it is stored
 /// in the map.
 /// You are allowed to modify the keys in the map **if the modification
-/// does not change the key's hash and equality**.
+/// does not change the key’s hash and equality**.
 ///
 /// If keys are modified erroneously, you can no longer look them up.
 /// This is sound (memory safe) but a logical error hazard (just like
@@ -18,8 +19,7 @@ use super::{
 /// `use` this trait to enable its methods for `IndexMap`.
 ///
 /// This trait is sealed and cannot be implemented for types outside this crate.
-#[expect(private_bounds)]
-pub trait MutableKeys: Sealed {
+pub trait MutableKeys: private::Sealed {
     type Key;
     type Value;
 
@@ -32,7 +32,7 @@ pub trait MutableKeys: Sealed {
 
     /// Return mutable reference to key and value at an index.
     ///
-    /// Valid indices are `0 <= index < self.len()`.
+    /// Valid indices are *0 <= index < self.len()*
     ///
     /// Computes in **O(1)** time.
     fn get_index_mut2(&mut self, index: usize) -> Option<(&mut Self::Key, &mut Self::Value)>;
@@ -95,7 +95,7 @@ where
 /// These methods expose `&mut K`, mutable references to the key as it is stored
 /// in the map.
 /// You are allowed to modify the keys in the map **if the modification
-/// does not change the key's hash and equality**.
+/// does not change the key’s hash and equality**.
 ///
 /// If keys are modified erroneously, you can no longer look them up.
 /// This is sound (memory safe) but a logical error hazard (just like
@@ -104,12 +104,8 @@ where
 /// `use` this trait to enable its methods for `Entry`.
 ///
 /// This trait is sealed and cannot be implemented for types outside this crate.
-#[expect(private_bounds)]
-pub trait MutableEntryKey: Sealed {
+pub trait MutableEntryKey: private::Sealed {
     type Key;
-
-    /// Gets a mutable reference to the entry's key, either within the map if occupied,
-    /// or else the new key that was used to find the entry.
     fn key_mut(&mut self) -> &mut Self::Key;
 }
 
@@ -118,6 +114,9 @@ pub trait MutableEntryKey: Sealed {
 /// See [`MutableEntryKey`] for more information.
 impl<K, V> MutableEntryKey for Entry<'_, K, V> {
     type Key = K;
+
+    /// Gets a mutable reference to the entry's key, either within the map if occupied,
+    /// or else the new key that was used to find the entry.
     fn key_mut(&mut self) -> &mut Self::Key {
         match self {
             Entry::Occupied(e) => e.key_mut(),
@@ -132,7 +131,7 @@ impl<K, V> MutableEntryKey for Entry<'_, K, V> {
 impl<K, V> MutableEntryKey for OccupiedEntry<'_, K, V> {
     type Key = K;
     fn key_mut(&mut self) -> &mut Self::Key {
-        &mut self.get_bucket_mut().key
+        self.key_mut()
     }
 }
 
@@ -156,10 +155,12 @@ impl<K, V> MutableEntryKey for IndexedEntry<'_, K, V> {
     }
 }
 
-trait Sealed {}
+mod private {
+    pub trait Sealed {}
 
-impl<K, V, S> Sealed for IndexMap<K, V, S> {}
-impl<K, V> Sealed for Entry<'_, K, V> {}
-impl<K, V> Sealed for OccupiedEntry<'_, K, V> {}
-impl<K, V> Sealed for VacantEntry<'_, K, V> {}
-impl<K, V> Sealed for IndexedEntry<'_, K, V> {}
+    impl<K, V, S> Sealed for super::IndexMap<K, V, S> {}
+    impl<K, V> Sealed for super::Entry<'_, K, V> {}
+    impl<K, V> Sealed for super::OccupiedEntry<'_, K, V> {}
+    impl<K, V> Sealed for super::VacantEntry<'_, K, V> {}
+    impl<K, V> Sealed for super::IndexedEntry<'_, K, V> {}
+}

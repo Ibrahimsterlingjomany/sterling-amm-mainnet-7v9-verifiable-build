@@ -33,7 +33,6 @@ pub fn process(input: &ItemEnum, cratename: Path) -> syn::Result<TokenStream2> {
     generics_output.extend(&mut where_clause, &cratename);
 
     Ok(quote! {
-        #[automatically_derived]
         impl #impl_generics #cratename::de::BorshDeserialize for #name #ty_generics #where_clause {
             fn deserialize_reader<__R: #cratename::io::Read>(reader: &mut __R) -> ::core::result::Result<Self, #cratename::io::Error> {
                 let tag = <u8 as #cratename::de::BorshDeserialize>::deserialize_reader(reader)?;
@@ -41,7 +40,6 @@ pub fn process(input: &ItemEnum, cratename: Path) -> syn::Result<TokenStream2> {
             }
         }
 
-        #[automatically_derived]
         impl #impl_generics #cratename::de::EnumExt for #name #ty_generics #where_clause {
             fn deserialize_variant<__R: #cratename::io::Read>(
                 reader: &mut __R,

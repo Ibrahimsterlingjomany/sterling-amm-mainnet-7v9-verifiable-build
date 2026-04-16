@@ -1,3 +1,5 @@
+#[cfg(feature = "serde-traits")]
+use serde::{Deserialize, Serialize};
 use {
     crate::{
         check_program_account,
@@ -13,9 +15,6 @@ use {
     spl_pod::optional_keys::OptionalNonZeroPubkey,
     std::convert::TryInto,
 };
-
-#[cfg(feature = "serde-traits")]
-use serde::{Deserialize, Serialize};
 
 /// Metadata pointer extension instructions
 #[cfg_attr(feature = "serde-traits", derive(Serialize, Deserialize))]
@@ -38,7 +37,6 @@ pub enum MetadataPointerInstruction {
     ///
     /// Data expected by this instruction:
     ///   `crate::extension::metadata_pointer::instruction::InitializeInstructionData`
-    ///
     Initialize,
     /// Update the metadata pointer address. Only supported for mints that
     /// include the `MetadataPointer` extension.
@@ -56,7 +54,6 @@ pub enum MetadataPointerInstruction {
     ///
     /// Data expected by this instruction:
     ///   `crate::extension::metadata_pointer::instruction::UpdateInstructionData`
-    ///
     Update,
 }
 

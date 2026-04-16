@@ -1,5 +1,5 @@
 use crate::common_macro::schema_imports::*;
-use core::net::IpAddr;
+use std::net::IpAddr;
 
 #[test]
 fn ip_addr_schema() {

@@ -12,7 +12,6 @@ use alloc::{boxed::Box, string::String};
 
 
 #[cfg(hash_collections)]
-#[allow(unused)]
 #[derive(BorshSerialize, BorshDeserialize)]
 struct CRec<U: Ord + Hash + Eq> {
     a: String,
@@ -21,7 +20,6 @@ struct CRec<U: Ord + Hash + Eq> {
 
 //  `impl<T, U> BorshDeserialize for Box<T>` pulls in => `ToOwned`
 // => pulls in at least `Clone`
-#[allow(unused)]
 #[derive(Clone, BorshSerialize, BorshDeserialize)]
 struct CRecA {
     a: String,
@@ -30,7 +28,6 @@ struct CRecA {
 
 
 #[cfg(hash_collections)]
-#[allow(unused)]
 #[derive(BorshSerialize, BorshDeserialize)]
 struct CRecC {
     a: String,

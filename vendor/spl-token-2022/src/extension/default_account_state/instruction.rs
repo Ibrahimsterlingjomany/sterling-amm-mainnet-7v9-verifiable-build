@@ -1,3 +1,5 @@
+#[cfg(feature = "serde-traits")]
+use serde::{Deserialize, Serialize};
 use {
     crate::{
         check_program_account, error::TokenError, instruction::TokenInstruction,
@@ -11,9 +13,6 @@ use {
     },
     std::convert::TryFrom,
 };
-
-#[cfg(feature = "serde-traits")]
-use serde::{Deserialize, Serialize};
 
 /// Default Account State extension instructions
 #[cfg_attr(feature = "serde-traits", derive(Serialize, Deserialize))]
@@ -36,10 +35,9 @@ pub enum DefaultAccountStateInstruction {
     ///
     /// Data expected by this instruction:
     ///   `crate::state::AccountState`
-    ///
     Initialize,
-    /// Update the default state for new Accounts. Only supported for mints that include the
-    /// `DefaultAccountState` extension.
+    /// Update the default state for new Accounts. Only supported for mints that
+    /// include the `DefaultAccountState` extension.
     ///
     /// Accounts expected by this instruction:
     ///
@@ -54,7 +52,6 @@ pub enum DefaultAccountStateInstruction {
     ///
     /// Data expected by this instruction:
     ///   `crate::state::AccountState`
-    ///
     Update,
 }
 

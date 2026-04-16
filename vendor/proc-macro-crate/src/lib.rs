@@ -94,12 +94,13 @@ use std::{
     time::SystemTime,
 };
 
-use toml_edit::{DocumentMut, Item, TableLike, TomlError};
+use toml_edit::{DocumentMut, Item, Table, TomlError};
 
 /// Error type used by this crate.
 pub enum Error {
     NotFound(PathBuf),
     CargoManifestDirNotSet,
+    CargoEnvVariableNotSet,
     FailedGettingWorkspaceManifestPath,
     CouldNotRead { path: PathBuf, source: io::Error },
     InvalidToml { source: TomlError },
@@ -137,6 +138,7 @@ impl fmt::Display for Error {
                 crate_name,
                 path.display(),
             ),
+            Error::CargoEnvVariableNotSet => f.write_str("`CARGO` env variable not set."),
             Error::FailedGettingWorkspaceManifestPath =>
                 f.write_str("Failed to get the path of the workspace manifest path."),
         }
@@ -174,10 +176,10 @@ type CrateNames = BTreeMap<String, FoundCrate>;
 ///
 /// # Returns
 ///
-/// - `Ok(FoundCrate::Itself)` the searched crate is the current crate being compiled.
-/// - `Ok(FoundCrate::Name(new_name))` the searched create was found with the given name in the
-///   `Cargo.toml`.
-/// - `Err` if an error occurred. See [`Error`].
+/// - `Ok(orig_name)` if the crate was found, but not renamed in the `Cargo.toml`.
+/// - `Ok(RENAMED)` if the crate was found, but is renamed in the `Cargo.toml`. `RENAMED` will be
+/// the renamed name.
+/// - `Err` if an error occurred.
 ///
 /// The returned crate name is sanitized in such a way that it is a valid rust identifier. Thus,
 /// it is ready to be used in `extern crate` as identifier.
@@ -239,11 +241,7 @@ pub fn crate_name(orig_name: &str) -> Result<FoundCrate, Error> {
 }
 
 fn workspace_manifest_path(cargo_toml_manifest: &Path) -> Result<Option<PathBuf>, Error> {
-    let Ok(cargo) = env::var("CARGO") else {
-        return Ok(None);
-    };
-
-    let stdout = Command::new(cargo)
+    let stdout = Command::new(env::var("CARGO").map_err(|_| Error::CargoEnvVariableNotSet)?)
         .arg("locate-project")
         .args(&["--workspace", "--message-format=plain"])
         .arg(format!("--manifest-path={}", cargo_toml_manifest.display()))
@@ -308,7 +306,6 @@ fn extract_workspace_dependencies(
 ) -> Result<BTreeMap<String, String>, Error> {
     Ok(workspace_dep_tables(&workspace_toml)
         .into_iter()
-        .map(|t| t.iter())
         .flatten()
         .map(move |(dep_name, dep_value)| {
             let pkg_name = dep_value.get("package").and_then(|i| i.as_str()).unwrap_or(dep_name);
@@ -319,10 +316,10 @@ fn extract_workspace_dependencies(
 }
 
 /// Return an iterator over all `[workspace.dependencies]`
-fn workspace_dep_tables(cargo_toml: &DocumentMut) -> Option<&dyn TableLike> {
+fn workspace_dep_tables(cargo_toml: &DocumentMut) -> Option<&Table> {
     cargo_toml
         .get("workspace")
-        .and_then(|w| w.as_table_like()?.get("dependencies")?.as_table_like())
+        .and_then(|w| w.as_table()?.get("dependencies")?.as_table())
 }
 
 /// Make sure that the given crate name is a valid rust identifier.
@@ -355,29 +352,27 @@ fn extract_crate_names(
         (name.to_string(), cr)
     });
 
-    let dep_tables = dep_tables(cargo_toml.as_table()).chain(target_dep_tables(cargo_toml));
-    let dep_pkgs =
-        dep_tables.map(|t| t.iter()).flatten().filter_map(move |(dep_name, dep_value)| {
-            let pkg_name = dep_value.get("package").and_then(|i| i.as_str()).unwrap_or(dep_name);
+    let dep_tables = dep_tables(cargo_toml).chain(target_dep_tables(cargo_toml));
+    let dep_pkgs = dep_tables.flatten().filter_map(move |(dep_name, dep_value)| {
+        let pkg_name = dep_value.get("package").and_then(|i| i.as_str()).unwrap_or(dep_name);
 
-            // We already handle this via `root_pkg` above.
-            if package_name.as_ref().map_or(false, |n| *n == pkg_name) {
-                return None
-            }
+        // We already handle this via `root_pkg` above.
+        if package_name.as_ref().map_or(false, |n| *n == pkg_name) {
+            return None
+        }
 
-            // Check if this is a workspace dependency.
-            let workspace =
-                dep_value.get("workspace").and_then(|w| w.as_bool()).unwrap_or_default();
+        // Check if this is a workspace dependency.
+        let workspace = dep_value.get("workspace").and_then(|w| w.as_bool()).unwrap_or_default();
 
-            let pkg_name = workspace
-                .then(|| workspace_dependencies.get(pkg_name).map(|p| p.as_ref()))
-                .flatten()
-                .unwrap_or(pkg_name);
+        let pkg_name = workspace
+            .then(|| workspace_dependencies.get(pkg_name).map(|p| p.as_ref()))
+            .flatten()
+            .unwrap_or(pkg_name);
 
-            let cr = FoundCrate::Name(sanitize_crate_name(dep_name));
+        let cr = FoundCrate::Name(sanitize_crate_name(dep_name));
 
-            Some((pkg_name.to_owned(), cr))
-        });
+        Some((pkg_name.to_owned(), cr))
+    });
 
     Ok(root_pkg.into_iter().chain(dep_pkgs).collect())
 }
@@ -386,25 +381,18 @@ fn extract_package_name(cargo_toml: &DocumentMut) -> Option<&str> {
     cargo_toml.get("package")?.get("name")?.as_str()
 }
 
-fn target_dep_tables(cargo_toml: &DocumentMut) -> impl Iterator<Item = &dyn TableLike> {
-    cargo_toml
-        .get("target")
-        .into_iter()
-        .filter_map(Item::as_table_like)
-        .flat_map(|t| {
-            t.iter()
-                .map(|(_, value)| value)
-                .filter_map(Item::as_table_like)
-                .flat_map(dep_tables)
-        })
+fn target_dep_tables(cargo_toml: &DocumentMut) -> impl Iterator<Item = &Table> {
+    cargo_toml.get("target").into_iter().filter_map(Item::as_table).flat_map(|t| {
+        t.iter().map(|(_, value)| value).filter_map(Item::as_table).flat_map(dep_tables)
+    })
 }
 
-fn dep_tables(table: &dyn TableLike) -> impl Iterator<Item = &dyn TableLike> {
+fn dep_tables(table: &Table) -> impl Iterator<Item = &Table> {
     table
         .get("dependencies")
         .into_iter()
         .chain(table.get("dev-dependencies"))
-        .filter_map(Item::as_table_like)
+        .filter_map(Item::as_table)
 }
 
 #[cfg(test)]
@@ -443,16 +431,6 @@ mod tests {
         r#"
             [dependencies]
             my_crate = "0.1"
-        "#,
-        "",
-        Ok(Some(FoundCrate::Name(name))) if name == "my_crate"
-    }
-
-    // forbidding toml_edit::Item::as_table ought to mean this is OK, but let's have a test too
-    create_test! {
-        deps_with_crate_inline_table,
-        r#"
-            dependencies = { my_crate = "0.1" }
         "#,
         "",
         Ok(Some(FoundCrate::Name(name))) if name == "my_crate"

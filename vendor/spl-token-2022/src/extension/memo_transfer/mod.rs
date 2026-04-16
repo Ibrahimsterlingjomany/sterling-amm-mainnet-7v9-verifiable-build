@@ -1,3 +1,5 @@
+#[cfg(feature = "serde-traits")]
+use serde::{Deserialize, Serialize};
 use {
     crate::{
         error::TokenError,
@@ -19,6 +21,8 @@ pub mod processor;
 
 /// Memo Transfer extension for Accounts
 #[repr(C)]
+#[cfg_attr(feature = "serde-traits", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde-traits", serde(rename_all = "camelCase"))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
 pub struct MemoTransfer {
     /// Require transfers into this account to be accompanied by a memo

@@ -76,7 +76,6 @@ pub fn process(input: &ItemEnum, cratename: Path) -> syn::Result<TokenStream2> {
     let (predicates, declaration) = generics_output.result(&enum_name, &cratename);
     where_clause.predicates.extend(predicates);
     Ok(quote! {
-        #[automatically_derived]
         impl #impl_generics #cratename::BorshSchema for #name #ty_generics #where_clause {
             fn declaration() -> #cratename::schema::Declaration {
                 #declaration
@@ -118,7 +117,7 @@ fn process_variant(
     generics_output: &mut schema::GenericsOutput,
 ) -> syn::Result<VariantOutput> {
     let variant_name = variant.ident.to_token_stream().to_string();
-    let full_variant_name = format!("{}__{}", enum_name, variant_name);
+    let full_variant_name = format!("{}{}", enum_name, variant_name);
     let full_variant_ident = Ident::new(&full_variant_name, Span::call_site());
 
     schema::visit_struct_fields(&variant.fields, &mut generics_output.params_visitor)?;
@@ -173,7 +172,6 @@ fn inner_struct_definition(
     let crate_str = syn::LitStr::new(&cratename.to_token_stream().to_string(), Span::call_site());
     let inner_struct = quote! {
         #[allow(dead_code)]
-        #[allow(non_camel_case_types)]
         #[derive(#cratename::BorshSchema)]
         #[borsh(crate = #crate_str)]
         #inner_struct

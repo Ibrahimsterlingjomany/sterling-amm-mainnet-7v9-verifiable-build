@@ -12,13 +12,12 @@
 [package]
 edition = "2021"
 name = "spl-transfer-hook-interface"
-version = "0.3.0"
+version = "0.4.1"
 authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
 description = "Solana Program Library Transfer Hook Interface"
 readme = "README.md"
 license = "Apache-2.0"
 repository = "https://github.com/solana-labs/solana-program-library"
-resolver = "1"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -37,7 +36,7 @@ version = "1.14.0"
 features = ["derive"]
 
 [dependencies.solana-program]
-version = "1.16.13"
+version = "1.17.6"
 
 [dependencies.spl-discriminator]
 version = "0.1"
@@ -49,7 +48,7 @@ version = "0.1"
 version = "0.3"
 
 [dependencies.spl-tlv-account-resolution]
-version = "0.4"
+version = "0.5"
 
 [dependencies.spl-type-length-value]
 version = "0.3"

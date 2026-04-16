@@ -1,3 +1,5 @@
+#[cfg(feature = "serde-traits")]
+use serde::{Deserialize, Serialize};
 use {
     crate::{
         check_program_account,
@@ -13,9 +15,6 @@ use {
     spl_pod::optional_keys::OptionalNonZeroPubkey,
     std::convert::TryInto,
 };
-
-#[cfg(feature = "serde-traits")]
-use serde::{Deserialize, Serialize};
 
 /// Transfer hook extension instructions
 #[cfg_attr(feature = "serde-traits", derive(Serialize, Deserialize))]
@@ -38,7 +37,6 @@ pub enum TransferHookInstruction {
     ///
     /// Data expected by this instruction:
     ///   `crate::extension::transfer_hook::instruction::InitializeInstructionData`
-    ///
     Initialize,
     /// Update the transfer hook program id. Only supported for mints that
     /// include the `TransferHook` extension.
@@ -56,7 +54,6 @@ pub enum TransferHookInstruction {
     ///
     /// Data expected by this instruction:
     ///   `crate::extension::transfer_hook::UpdateInstructionData`
-    ///
     Update,
 }
 

@@ -913,9 +913,9 @@ where
     #[cfg_attr(feature = "inline-more", inline)]
     pub fn get_or_insert(&mut self, value: T) -> &T {
         let hash = make_hash(&self.map.hash_builder, &value);
-        let bucket = match self.map.find_or_find_insert_index(hash, &value) {
+        let bucket = match self.map.find_or_find_insert_slot(hash, &value) {
             Ok(bucket) => bucket,
-            Err(index) => unsafe { self.map.table.insert_at_index(hash, index, (value, ())) },
+            Err(slot) => unsafe { self.map.table.insert_in_slot(hash, slot, (value, ())) },
         };
         unsafe { &bucket.as_ref().0 }
     }
@@ -952,12 +952,12 @@ where
         F: FnOnce(&Q) -> T,
     {
         let hash = make_hash(&self.map.hash_builder, value);
-        let bucket = match self.map.find_or_find_insert_index(hash, value) {
+        let bucket = match self.map.find_or_find_insert_slot(hash, value) {
             Ok(bucket) => bucket,
-            Err(index) => {
+            Err(slot) => {
                 let new = f(value);
                 assert!(value.equivalent(&new), "new value is not equivalent");
-                unsafe { self.map.table.insert_at_index(hash, index, (new, ())) }
+                unsafe { self.map.table.insert_in_slot(hash, slot, (new, ())) }
             }
         };
         unsafe { &bucket.as_ref().0 }
@@ -1139,11 +1139,11 @@ where
     #[cfg_attr(feature = "inline-more", inline)]
     pub fn replace(&mut self, value: T) -> Option<T> {
         let hash = make_hash(&self.map.hash_builder, &value);
-        match self.map.find_or_find_insert_index(hash, &value) {
+        match self.map.find_or_find_insert_slot(hash, &value) {
             Ok(bucket) => Some(mem::replace(unsafe { &mut bucket.as_mut().0 }, value)),
-            Err(index) => {
+            Err(slot) => {
                 unsafe {
-                    self.map.table.insert_at_index(hash, index, (value, ()));
+                    self.map.table.insert_in_slot(hash, slot, (value, ()));
                 }
                 None
             }
@@ -1586,14 +1586,14 @@ where
     fn bitxor_assign(&mut self, rhs: &HashSet<T, S, A>) {
         for item in rhs {
             let hash = make_hash(&self.map.hash_builder, item);
-            match self.map.find_or_find_insert_index(hash, item) {
+            match self.map.find_or_find_insert_slot(hash, item) {
                 Ok(bucket) => unsafe {
                     self.map.table.remove(bucket);
                 },
-                Err(index) => unsafe {
+                Err(slot) => unsafe {
                     self.map
                         .table
-                        .insert_at_index(hash, index, (item.clone(), ()));
+                        .insert_in_slot(hash, slot, (item.clone(), ()));
                 },
             }
         }
@@ -1678,7 +1678,10 @@ pub struct Drain<'a, K, A: Allocator = Global> {
 /// [`extract_if`]: struct.HashSet.html#method.extract_if
 /// [`HashSet`]: struct.HashSet.html
 #[must_use = "Iterators are lazy unless consumed"]
-pub struct ExtractIf<'a, K, F, A: Allocator = Global> {
+pub struct ExtractIf<'a, K, F, A: Allocator = Global>
+where
+    F: FnMut(&K) -> bool,
+{
     f: F,
     inner: RawExtractIf<'a, (K, ()), A>,
 }
@@ -2748,22 +2751,6 @@ mod test_set {
         let mut i = 0;
         let expected = [-2, 1, 5, 11, 14, 22];
         for x in a.symmetric_difference(&b) {
-            assert!(expected.contains(x));
-            i += 1;
-        }
-        assert_eq!(i, expected.len());
-    }
-
-    #[test]
-    fn test_sub_assign() {
-        let mut a: HashSet<_> = vec![1, 2, 3, 4, 5].into_iter().collect();
-        let b: HashSet<_> = vec![4, 5, 6].into_iter().collect();
-
-        a -= &b;
-
-        let mut i = 0;
-        let expected = [1, 2, 3];
-        for x in &a {
             assert!(expected.contains(x));
             i += 1;
         }

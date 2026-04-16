@@ -10,9 +10,9 @@
 # See Cargo.toml.orig for the original contents.
 
 [package]
-edition = "2024"
+edition = "2021"
 name = "blake3"
-version = "1.8.3"
+version = "1.5.5"
 authors = [
     "Jack O'Connor <oconnor663@gmail.com>",
     "Samuel Neves",
@@ -52,10 +52,12 @@ no_sse2 = []
 no_sse41 = []
 prefer_intrinsics = []
 pure = []
-rayon = ["dep:rayon-core"]
-std = ["constant_time_eq/std"]
+rayon = [
+    "dep:rayon-core",
+    "std",
+]
+std = []
 traits-preview = ["dep:digest"]
-wasm32_simd = []
 zeroize = [
     "dep:zeroize",
     "arrayvec/zeroize",
@@ -69,18 +71,16 @@ path = "src/lib.rs"
 name = "bench"
 path = "benches/bench.rs"
 
-[dependencies.arrayref]
-version = "0.3.5"
+[dependencies]
+arrayref = "0.3.5"
+cfg-if = "1.0.0"
 
 [dependencies.arrayvec]
 version = "0.7.4"
 default-features = false
 
-[dependencies.cfg-if]
-version = "1.0.0"
-
 [dependencies.constant_time_eq]
-version = "0.4.2"
+version = "0.3.1"
 default-features = false
 
 [dependencies.digest]
@@ -107,32 +107,18 @@ version = "1"
 optional = true
 default-features = false
 
-[dev-dependencies.ciborium]
-version = "0.2.2"
+[dev-dependencies]
+ciborium = "0.2.2"
+hex = "0.4.2"
+hmac = "0.12.0"
+page_size = "0.6.0"
+rand = "0.8.0"
+rand_chacha = "0.3.0"
+serde_json = "1.0.107"
+tempfile = "3.8.0"
 
-[dev-dependencies.hex]
-version = "0.4.2"
+[dev-dependencies.reference_impl]
+path = "./reference_impl"
 
-[dev-dependencies.hmac]
-version = "0.12.0"
-
-[dev-dependencies.page_size]
-version = "0.6.0"
-
-[dev-dependencies.rand]
-version = "0.9.0"
-
-[dev-dependencies.rand_chacha]
-version = "0.9.0"
-
-[dev-dependencies.serde_json]
-version = "1.0.107"
-
-[dev-dependencies.tempfile]
-version = "3.8.0"
-
-[build-dependencies.cc]
-version = "1.1.12"
-
-[target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies.cpufeatures]
-version = "0.2.17"
+[build-dependencies]
+cc = "1.1.12"
