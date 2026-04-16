@@ -1,15 +1,19 @@
 [workspace]
-members = ["programs/*"]
+members = [
+  "programs/sterling_amm"
+]
 resolver = "2"
 
+# ---- FIX: éviter blake3 edition2024 ----
+# DISABLED: 
+
+
 [patch.crates-io]
-constant_time_eq = { path = "vendor/constant_time_eq-0.4.2" }
-blake3 = { path = "vendor/blake3-1.8.3" }
+blake3 = { git = "https://github.com/BLAKE3-team/BLAKE3", tag = "1.5.5" }
 
 [profile.release]
-overflow-checks = true
 lto = "fat"
 codegen-units = 1
-panic = "abort"
 opt-level = "z"
+panic = "abort"
 strip = "symbols"

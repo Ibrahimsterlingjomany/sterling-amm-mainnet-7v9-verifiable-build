@@ -4,7 +4,7 @@ Clean and isolated workspace for deterministic verification of the deployed Sola
 
 ## Canonical identifiers
 
-- Program name: `sterling_amm_mainnet`
+- Program name: `sterling_amm`
 - Program ID: `7v9sLrk92NNLLUfXLJw3o7MycZNvwsTK6kLWfWb8vcVA`
 - Upgrade authority: `CMqD45Kq5oukPvaMDhzav5RxJqZb1xME1MmV71CzCeTw`
 - Workspace path: `verifiable-build/sterling_amm_mainnet_7v9`
@@ -15,7 +15,7 @@ This workspace is intentionally separated from the legacy mono-workspace to avoi
 
 Produce `MATCH: TRUE` between:
 
-- local executable hash from `target/deploy/sterling_amm_mainnet.so`
+- local executable hash from `target/deploy/sterling_amm.so`
 - on-chain executable hash for program `7v9s...`
 
 ## Quick status
@@ -27,7 +27,7 @@ Current status is tracked in [`MATCH_STATUS.md`](./MATCH_STATUS.md).
 1. Build in verifiable mode:
 
 ```bash
-solana-verify build . --library-name sterling_amm_mainnet
+solana-verify build . --library-name sterling_amm
 ```
 
 2. Check local hash and on-chain hash in one command:
@@ -45,7 +45,7 @@ After pushing this repo, run:
 ```bash
 solana-verify verify-from-repo \
   --program-id 7v9sLrk92NNLLUfXLJw3o7MycZNvwsTK6kLWfWb8vcVA \
-  --library-name sterling_amm_mainnet \
+  --library-name sterling_amm \
   https://github.com/<org-or-user>/<repo>
 ```
 

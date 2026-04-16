@@ -1,12 +1,12 @@
 # MATCH Status (Program `7v9s...`)
 
-Updated: 2026-04-15
+Updated: 2026-04-16
 
 ## Current result
 
-- `MATCH`: `FALSE`
-- Local executable hash: `0f72bfbcf021333a6c0c96de7880c7707d41f1d9af0da2c161b381c99d3cf429`
-- On-chain executable hash: `16c7748627f7114c1a155654ee1c788bd1cd4ad40f8a5f302f2aeaf3994ef85d`
+- `MATCH`: `PENDING PUBLIC VERIFY`
+- Local executable hash: `1e6a4ce1ed7c915da2da1192b43cf3dbbda83470619ecb10fd7f3809af591055`
+- On-chain executable hash: `1e6a4ce1ed7c915da2da1192b43cf3dbbda83470619ecb10fd7f3809af591055`
 
 ## Recheck command
 
@@ -19,14 +19,14 @@ bash scripts/check_match.sh
 ```bash
 solana-verify verify-from-repo \
   --program-id 7v9sLrk92NNLLUfXLJw3o7MycZNvwsTK6kLWfWb8vcVA \
-  --library-name sterling_amm_mainnet \
+  --library-name sterling_amm \
   https://github.com/Ibrahimsterlingjomany/sterling-amm-mainnet-7v9-verifiable-build
 ```
 
 Latest run note:
 
-- Command reaches repo checkout and target detection successfully.
-- Local machine must run Docker daemon for build-in-container phase.
+- The canonical verification repo now rebuilds the same local hash as the deployed program.
+- Next step is publishing the verification record from the synced GitHub commit.
 
 ## Target state
 
