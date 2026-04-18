@@ -1,12 +1,14 @@
 # MATCH Status (Program `7v9s...`)
 
-Updated: 2026-04-15
+Updated: 2026-04-18
 
 ## Current result
 
-- `MATCH`: `FALSE`
-- Local executable hash: `0f72bfbcf021333a6c0c96de7880c7707d41f1d9af0da2c161b381c99d3cf429`
-- On-chain executable hash: `16c7748627f7114c1a155654ee1c788bd1cd4ad40f8a5f302f2aeaf3994ef85d`
+- `MATCH`: `TRUE`
+- Live runtime executable hash: `5a8be3af9d8303b6b9912240d2a78810bc260dc8c911bf0b8b6b69081dde37df`
+- On-chain executable hash: `5a8be3af9d8303b6b9912240d2a78810bc260dc8c911bf0b8b6b69081dde37df`
+- Verification repo commit pinned on-chain: `c40fb266b5d19bc259da56cd2b7274e0a740ca37`
+- Verification refresh tx: `61G4tw4DZxyixgmQpjGsRB9hPJXFa9dv9fRFUCtcrLNBuEJhU6MNaM38aKstpYvjTAGcVBKRq66jwbBUNjy3MNyX`
 
 ## Recheck command
 
@@ -19,14 +21,15 @@ bash scripts/check_match.sh
 ```bash
 solana-verify verify-from-repo \
   --program-id 7v9sLrk92NNLLUfXLJw3o7MycZNvwsTK6kLWfWb8vcVA \
-  --library-name sterling_amm_mainnet \
+  --library-name sterling_amm \
   https://github.com/Ibrahimsterlingjomany/sterling-amm-mainnet-7v9-verifiable-build
 ```
 
 Latest run note:
 
-- Command reaches repo checkout and target detection successfully.
-- Local machine must run Docker daemon for build-in-container phase.
+- The live program has been returned to the verified runtime normal.
+- Public verification data has been refreshed on-chain after the temporary migration passes.
+- Legacy V1 -> V2 migrations are complete for payout tickets, settlement claims, and protocol debt ledgers.
 
 ## Target state
 
@@ -36,4 +39,5 @@ Latest run note:
 ## Notes
 
 - This repo tracks deterministic verification evidence for Solscan and public auditability.
-- The mismatch is build reproducibility related; it is not a proof of program compromise by itself.
+- Public project name: `Sterling DEX`
+- Program crate and deployed binary name: `sterling_amm`
