@@ -2483,18 +2483,21 @@ pub mod sterling_amm {
         require_keeper(&ctx.accounts.config, &ctx.accounts.keeper)?;
 
         let pool_key = ctx.accounts.pool.key();
-        let lot =
-            find_protocol_debt_lot_by_nonce_mut(&mut ctx.accounts.protocol_debt_ledger, nonce)?;
+        let mut ledger_data = ctx.accounts.protocol_debt_ledger.try_borrow_mut_data()?;
+        let (lot_index, mut lot, ledger_pool_key) =
+            load_protocol_debt_lot_from_ledger_data(&ledger_data, nonce)?;
+        require!(ledger_pool_key == pool_key, SterlingError::InvalidAccount);
         require!(
             lot.status == PROTOCOL_DEBT_LOT_OPEN || lot.status == PROTOCOL_DEBT_LOT_TICKETED,
             SterlingError::InvalidState
         );
         sync_protocol_debt_lot_escrow_funding_state(
             pool_key,
-            lot,
+            &mut lot,
             &ctx.accounts.source_escrow_ata,
             ctx.accounts.source_escrow_ata.key(),
-        )
+        )?;
+        store_protocol_debt_lot_into_ledger_data(&mut ledger_data, lot_index, &lot)
     }
 
     pub fn settle_claim_paid(
@@ -2555,17 +2558,16 @@ pub mod sterling_amm {
         proof_sig: [u8; 64],
     ) -> Result<()> {
         require_keeper(&ctx.accounts.config, &ctx.accounts.keeper)?;
-        require!(
-            ctx.accounts.protocol_debt_ledger.pool == ctx.accounts.pool.key(),
-            SterlingError::InvalidAccount
-        );
         require_protocol_fee_debt_payment_proof(&proof_sig)?;
         require!(paid_usd_micros > 0, SterlingError::InvalidAmount);
 
+        let mut ledger_data = ctx.accounts.protocol_debt_ledger.try_borrow_mut_data()?;
+        let ledger_pool = protocol_debt_ledger_pool_from_data(&ledger_data)?;
+        require!(ledger_pool == ctx.accounts.pool.key(), SterlingError::InvalidAccount);
         let now = Clock::get()?.unix_timestamp;
-        let settled_usd_micros = settle_protocol_debt_lots_in_ledger(
+        let settled_usd_micros = settle_protocol_debt_lots_in_ledger_data(
             &mut ctx.accounts.pool,
-            &mut ctx.accounts.protocol_debt_ledger,
+            &mut ledger_data,
             paid_usd_micros,
             now,
         )?;
@@ -2584,13 +2586,12 @@ pub mod sterling_amm {
     pub fn init_protocol_debt_ledger(ctx: Context<InitProtocolDebtLedger>) -> Result<()> {
         crate::helpers::require_admin(&ctx.accounts.config, &ctx.accounts.admin)?;
 
-        let ledger = &mut ctx.accounts.protocol_debt_ledger;
-        ledger.pool = ctx.accounts.pool.key();
-        ledger.next_nonce = 1;
-        ledger.overflow_usd_micros = 0;
-        ledger.last_ts = 0;
-        ledger.bump = ctx.bumps.protocol_debt_ledger;
-        ledger.lots = [ProtocolDebtLot::default(); PROTOCOL_DEBT_LEDGER_SLOTS];
+        let mut ledger_data = ctx.accounts.protocol_debt_ledger.try_borrow_mut_data()?;
+        initialize_protocol_debt_ledger_data(
+            &mut ledger_data,
+            ctx.accounts.pool.key(),
+            ctx.bumps.protocol_debt_ledger,
+        )?;
 
         Ok(())
     }
@@ -4387,13 +4388,13 @@ pub mod sterling_amm {
     }
 
     pub fn migrate_config_v1_to_v2(ctx: Context<MigrateConfigV1ToV2>) -> Result<()> {
-        #[cfg(not(feature = "migration"))]
+        #[cfg(not(any(feature = "migration-full", feature = "migration-ledger")))]
         {
             let _ = ctx;
             return err!(SterlingError::InvalidState);
         }
 
-        #[cfg(feature = "migration")]
+        #[cfg(any(feature = "migration-full", feature = "migration-ledger"))]
         {
             let config_ai = ctx.accounts.config.to_account_info();
             let (expected_config, _) = Pubkey::find_program_address(&[b"config"], ctx.program_id);
@@ -4438,13 +4439,13 @@ pub mod sterling_amm {
     }
 
     pub fn migrate_pool_v1_to_v2(ctx: Context<MigratePoolV1ToV2>) -> Result<()> {
-        #[cfg(not(feature = "migration"))]
+        #[cfg(not(any(feature = "migration-full", feature = "migration-ledger")))]
         {
             let _ = ctx;
             return err!(SterlingError::InvalidState);
         }
 
-        #[cfg(feature = "migration")]
+        #[cfg(any(feature = "migration-full", feature = "migration-ledger"))]
         {
             let config_ai = ctx.accounts.config.to_account_info();
             let base_mint = ctx.accounts.base_mint.key();
@@ -4515,70 +4516,27 @@ pub mod sterling_amm {
 
     pub fn migrate_payout_ticket_v1_to_v2(
         ctx: Context<MigratePayoutTicketV1ToV2>,
-        nonce: u64,
+        _nonce: u64,
     ) -> Result<()> {
-        #[cfg(not(feature = "migration"))]
+        #[cfg(not(feature = "migration-payout"))]
         {
-            let _ = (ctx, nonce);
+            let _ = (ctx, _nonce);
             return err!(SterlingError::InvalidState);
         }
 
-        #[cfg(feature = "migration")]
+        #[cfg(feature = "migration-payout")]
         {
-            let config_ai = ctx.accounts.config.to_account_info();
-            let (expected_config, _) = Pubkey::find_program_address(&[b"config"], ctx.program_id);
-            require!(
-                config_ai.key() == expected_config,
-                SterlingError::InvalidAccount
-            );
-            require!(
-                config_ai.owner == ctx.program_id,
-                SterlingError::InvalidAccount
-            );
-            require_admin_on_config_info(&config_ai, &ctx.accounts.admin)?;
-
+            crate::helpers::require_admin(&ctx.accounts.config, &ctx.accounts.admin)?;
             let ticket_ai = ctx.accounts.ticket.to_account_info();
-            let (expected_ticket, _) = Pubkey::find_program_address(
-                &[
-                    b"payout",
-                    ctx.accounts.user.key().as_ref(),
-                    ctx.accounts.pool.key().as_ref(),
-                    &nonce.to_le_bytes(),
-                ],
-                ctx.program_id,
-            );
-            require!(
-                ticket_ai.key() == expected_ticket,
-                SterlingError::InvalidAccount
-            );
-            require!(
-                ticket_ai.owner == ctx.program_id,
-                SterlingError::InvalidAccount
-            );
 
-            let original_len = ticket_ai.data_len();
-            let already_v2 = {
-                let data = ticket_ai.try_borrow_data()?;
-                let mut bytes: &[u8] = &data;
-                PayoutTicket::try_deserialize(&mut bytes).is_ok()
-            };
-            if already_v2 && !payout_ticket_needs_migration(original_len) {
+            if ticket_ai.data_len() >= PayoutTicket::LEN {
                 return Ok(());
             }
 
-            let legacy = {
+            let migrated = {
                 let data = ticket_ai.try_borrow_data()?;
-                deserialize_legacy_payout_ticket_v1(&data)?
+                build_payout_ticket_from_legacy_v1(ticket_ai.key(), &data)?
             };
-            require!(
-                legacy.pool == ctx.accounts.pool.key(),
-                SterlingError::InvalidAccount
-            );
-            require!(
-                legacy.user == ctx.accounts.user.key(),
-                SterlingError::InvalidAccount
-            );
-            require!(legacy.nonce == nonce, SterlingError::InvalidState);
 
             realloc_program_account(
                 &ticket_ai,
@@ -4587,7 +4545,6 @@ pub mod sterling_amm {
                 PayoutTicket::LEN,
             )?;
 
-            let migrated = build_payout_ticket_from_legacy_v1(ticket_ai.key(), &legacy);
             let mut data = ticket_ai.try_borrow_mut_data()?;
             let mut out: &mut [u8] = &mut data;
             migrated.try_serialize(&mut out)?;
@@ -4597,70 +4554,27 @@ pub mod sterling_amm {
 
     pub fn migrate_settlement_claim_v1_to_v2(
         ctx: Context<MigrateSettlementClaimV1ToV2>,
-        nonce: u64,
+        _nonce: u64,
     ) -> Result<()> {
-        #[cfg(not(feature = "migration"))]
+        #[cfg(not(feature = "migration-claim"))]
         {
-            let _ = (ctx, nonce);
+            let _ = (ctx, _nonce);
             return err!(SterlingError::InvalidState);
         }
 
-        #[cfg(feature = "migration")]
+        #[cfg(feature = "migration-claim")]
         {
-            let config_ai = ctx.accounts.config.to_account_info();
-            let (expected_config, _) = Pubkey::find_program_address(&[b"config"], ctx.program_id);
-            require!(
-                config_ai.key() == expected_config,
-                SterlingError::InvalidAccount
-            );
-            require!(
-                config_ai.owner == ctx.program_id,
-                SterlingError::InvalidAccount
-            );
-            require_admin_on_config_info(&config_ai, &ctx.accounts.admin)?;
-
+            crate::helpers::require_admin(&ctx.accounts.config, &ctx.accounts.admin)?;
             let claim_ai = ctx.accounts.claim.to_account_info();
-            let (expected_claim, _) = Pubkey::find_program_address(
-                &[
-                    b"claim",
-                    ctx.accounts.user.key().as_ref(),
-                    ctx.accounts.pool.key().as_ref(),
-                    &nonce.to_le_bytes(),
-                ],
-                ctx.program_id,
-            );
-            require!(
-                claim_ai.key() == expected_claim,
-                SterlingError::InvalidAccount
-            );
-            require!(
-                claim_ai.owner == ctx.program_id,
-                SterlingError::InvalidAccount
-            );
 
-            let original_len = claim_ai.data_len();
-            let already_v2 = {
-                let data = claim_ai.try_borrow_data()?;
-                let mut bytes: &[u8] = &data;
-                SettlementClaim::try_deserialize(&mut bytes).is_ok()
-            };
-            if already_v2 && !settlement_claim_needs_migration(original_len) {
+            if claim_ai.data_len() >= SettlementClaim::LEN {
                 return Ok(());
             }
 
-            let legacy = {
+            let migrated = {
                 let data = claim_ai.try_borrow_data()?;
-                deserialize_legacy_settlement_claim_v1(&data)?
+                build_settlement_claim_from_legacy_v1(claim_ai.key(), &data)?
             };
-            require!(
-                legacy.pool == ctx.accounts.pool.key(),
-                SterlingError::InvalidAccount
-            );
-            require!(
-                legacy.user == ctx.accounts.user.key(),
-                SterlingError::InvalidAccount
-            );
-            require!(legacy.nonce == nonce, SterlingError::InvalidState);
 
             realloc_program_account(
                 &claim_ai,
@@ -4669,7 +4583,6 @@ pub mod sterling_amm {
                 SettlementClaim::LEN,
             )?;
 
-            let migrated = build_settlement_claim_from_legacy_v1(claim_ai.key(), &legacy);
             let mut data = claim_ai.try_borrow_mut_data()?;
             let mut out: &mut [u8] = &mut data;
             migrated.try_serialize(&mut out)?;
@@ -4680,13 +4593,13 @@ pub mod sterling_amm {
     pub fn migrate_protocol_debt_ledger_v1_to_v2(
         ctx: Context<MigrateProtocolDebtLedgerV1ToV2>,
     ) -> Result<()> {
-        #[cfg(not(feature = "migration"))]
+        #[cfg(not(any(feature = "migration-full", feature = "migration-ledger")))]
         {
             let _ = ctx;
             return err!(SterlingError::InvalidState);
         }
 
-        #[cfg(feature = "migration")]
+        #[cfg(any(feature = "migration-full", feature = "migration-ledger"))]
         {
             let config_ai = ctx.accounts.config.to_account_info();
             let (expected_config, _) = Pubkey::find_program_address(&[b"config"], ctx.program_id);
@@ -4717,8 +4630,9 @@ pub mod sterling_amm {
             let original_len = ledger_ai.data_len();
             let already_v2 = {
                 let data = ledger_ai.try_borrow_data()?;
-                let mut bytes: &[u8] = &data;
-                ProtocolDebtLedger::try_deserialize(&mut bytes).is_ok()
+                data.len() >= ProtocolDebtLedger::LEN
+                    && data[..8]
+                        == <ProtocolDebtLedger as anchor_lang::Discriminator>::discriminator()
             };
             if already_v2 && !protocol_debt_ledger_needs_migration(original_len) {
                 return Ok(());
@@ -5249,17 +5163,21 @@ pub struct MigratePoolV1ToV2<'info> {
 #[derive(Accounts)]
 #[instruction(nonce: u64)]
 pub struct MigratePayoutTicketV1ToV2<'info> {
-    /// CHECK: legacy/full config, parsed manually for admin compatibility
-    #[account(mut)]
-    pub config: UncheckedAccount<'info>,
+    #[account(mut, seeds = [b"config"], bump)]
+    pub config: Box<Account<'info, Config>>,
     #[account(mut)]
     pub admin: Signer<'info>,
-    /// CHECK: key only, used for PDA derivation
+    /// CHECK: key only, used for PDA constraint
     pub user: UncheckedAccount<'info>,
-    /// CHECK: key only, used for PDA derivation
+    /// CHECK: key only, used for PDA constraint
     pub pool: UncheckedAccount<'info>,
     /// CHECK: legacy/full payout ticket, parsed manually for migration compatibility
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"payout", user.key().as_ref(), pool.key().as_ref(), &nonce.to_le_bytes()],
+        bump,
+        owner = crate::ID
+    )]
     pub ticket: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
 }
@@ -5267,17 +5185,21 @@ pub struct MigratePayoutTicketV1ToV2<'info> {
 #[derive(Accounts)]
 #[instruction(nonce: u64)]
 pub struct MigrateSettlementClaimV1ToV2<'info> {
-    /// CHECK: legacy/full config, parsed manually for admin compatibility
-    #[account(mut)]
-    pub config: UncheckedAccount<'info>,
+    #[account(mut, seeds = [b"config"], bump)]
+    pub config: Box<Account<'info, Config>>,
     #[account(mut)]
     pub admin: Signer<'info>,
-    /// CHECK: key only, used for PDA derivation
+    /// CHECK: key only, used for PDA constraint
     pub user: UncheckedAccount<'info>,
-    /// CHECK: key only, used for PDA derivation
+    /// CHECK: key only, used for PDA constraint
     pub pool: UncheckedAccount<'info>,
     /// CHECK: legacy/full settlement claim, parsed manually for migration compatibility
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"claim", user.key().as_ref(), pool.key().as_ref(), &nonce.to_le_bytes()],
+        bump,
+        owner = crate::ID
+    )]
     pub claim: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
 }
@@ -6016,6 +5938,11 @@ impl PoolRegistryEntry {
     pub const LEN: usize = 8 + (32 * 8) + 8 + 1;
 }
 
+#[cfg(not(any(
+    feature = "migration-payout",
+    feature = "migration-claim",
+    feature = "migration-ledger"
+)))]
 #[account]
 pub struct ProtocolDebtLedger {
     pub pool: Pubkey,
@@ -6027,6 +5954,29 @@ pub struct ProtocolDebtLedger {
     pub bump: u8,
     // Lots/tickets logiques matérialisables individuellement, chacun <= 250K USD micros.
     pub lots: [ProtocolDebtLot; PROTOCOL_DEBT_LEDGER_SLOTS],
+}
+
+#[cfg(any(
+    feature = "migration-payout",
+    feature = "migration-claim",
+    feature = "migration-ledger"
+))]
+pub struct ProtocolDebtLedger {
+    pub pool: Pubkey,
+    pub next_nonce: u64,
+    pub overflow_usd_micros: u64,
+    pub last_ts: i64,
+    pub bump: u8,
+    pub lots: [ProtocolDebtLot; PROTOCOL_DEBT_LEDGER_SLOTS],
+}
+
+#[cfg(any(
+    feature = "migration-payout",
+    feature = "migration-claim",
+    feature = "migration-ledger"
+))]
+impl anchor_lang::Discriminator for ProtocolDebtLedger {
+    const DISCRIMINATOR: [u8; 8] = [0x89, 0x77, 0xc3, 0xdf, 0xa3, 0xf6, 0x67, 0xe5];
 }
 
 impl ProtocolDebtLedger {
@@ -6685,22 +6635,22 @@ fn set_enabled_flag(cfg: &mut Config, mint: &Pubkey, enabled: bool) -> Result<()
     err!(SterlingError::UnsupportedMint)
 }
 
-#[cfg(feature = "migration")]
+#[cfg(any(feature = "migration-full", feature = "migration-ledger"))]
 const CONFIG_ACCOUNT_LEN: usize = 8 + 1400;
-#[cfg(feature = "migration")]
+#[cfg(any(feature = "migration-full", feature = "migration-ledger"))]
 const LEGACY_CONFIG_V1_MIN_LEN: usize = 8 + 71;
-#[cfg(feature = "migration")]
+#[cfg(any(feature = "migration-full", feature = "migration-ledger"))]
 const LEGACY_POOL_V1_MIN_LEN: usize = 8 + 215;
-#[cfg(feature = "migration")]
+#[cfg(feature = "migration-payout")]
 const LEGACY_PAYOUT_TICKET_V1_MIN_LEN: usize = 8 + 203;
-#[cfg(feature = "migration")]
+#[cfg(feature = "migration-claim")]
 const LEGACY_SETTLEMENT_CLAIM_V1_MIN_LEN: usize = 8 + 283;
-#[cfg(feature = "migration")]
+#[cfg(any(feature = "migration-full", feature = "migration-ledger"))]
 const LEGACY_PROTOCOL_DEBT_LEDGER_V1_MIN_LEN: usize = 1121;
-#[cfg(feature = "migration")]
+#[cfg(any(feature = "migration-full", feature = "migration-ledger"))]
 const LEGACY_PROTOCOL_DEBT_LOT_V1_LEN: usize = 8 + 32 + 8 + 8 + 8 + 1 + 1;
 
-#[cfg(feature = "migration")]
+#[cfg(any(feature = "migration-full", feature = "migration-ledger"))]
 #[cfg_attr(test, derive(AnchorSerialize, Debug, PartialEq, Eq))]
 struct ConfigLegacyV1 {
     admin: Pubkey,
@@ -6723,7 +6673,7 @@ struct ConfigLegacyV1 {
     enable_btc_portal: bool,
 }
 
-#[cfg(feature = "migration")]
+#[cfg(any(feature = "migration-full", feature = "migration-ledger"))]
 #[cfg_attr(test, derive(AnchorSerialize, Debug, PartialEq, Eq))]
 struct PoolLegacyV1 {
     owner: Pubkey,
@@ -6742,46 +6692,7 @@ struct PoolLegacyV1 {
     active: bool,
 }
 
-#[cfg(feature = "migration")]
-#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
-struct PayoutTicketLegacyV1 {
-    pool: Pubkey,
-    payout_mint: Pubkey,
-    payout_kind: u8,
-    user: Pubkey,
-    mint_in: Pubkey,
-    amount_in: u64,
-    usd_micros: u64,
-    destination_ata: Pubkey,
-    nonce: u64,
-    created_ts: i64,
-    settled_ts: i64,
-    status: u8,
-    bump: u8,
-}
-
-#[cfg(feature = "migration")]
-#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
-struct SettlementClaimLegacyV1 {
-    pool: Pubkey,
-    payout_mint: Pubkey,
-    payout_kind: u8,
-    user: Pubkey,
-    mint_in: Pubkey,
-    amount_in: u64,
-    usd_micros: u64,
-    due_atoms: u64,
-    paid_atoms: u64,
-    proof_sig: [u8; 64],
-    destination_ata: Pubkey,
-    nonce: u64,
-    created_ts: i64,
-    settled_ts: i64,
-    status: u8,
-    bump: u8,
-}
-
-#[cfg(feature = "migration")]
+#[cfg(any(feature = "migration-full", feature = "migration-ledger"))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct ProtocolDebtLotLegacyV1 {
     nonce: u64,
@@ -6793,7 +6704,7 @@ struct ProtocolDebtLotLegacyV1 {
     status: u8,
 }
 
-#[cfg(feature = "migration")]
+#[cfg(any(feature = "migration-full", feature = "migration-ledger"))]
 #[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 struct ProtocolDebtLedgerLegacyV1 {
     pool: Pubkey,
@@ -6804,58 +6715,60 @@ struct ProtocolDebtLedgerLegacyV1 {
     lots: [ProtocolDebtLotLegacyV1; PROTOCOL_DEBT_LEDGER_SLOTS],
 }
 
-#[cfg(feature = "migration")]
+#[cfg(any(feature = "migration-full", feature = "migration-ledger"))]
 fn config_needs_migration(account_len: usize) -> bool {
     account_len < CONFIG_ACCOUNT_LEN
 }
 
-#[cfg(feature = "migration")]
+#[cfg(any(feature = "migration-full", feature = "migration-ledger"))]
 fn pool_needs_migration(account_len: usize) -> bool {
     account_len < Pool::LEN
 }
 
-#[cfg(feature = "migration")]
-fn payout_ticket_needs_migration(account_len: usize) -> bool {
-    account_len < PayoutTicket::LEN
-}
-
-#[cfg(feature = "migration")]
-fn settlement_claim_needs_migration(account_len: usize) -> bool {
-    account_len < SettlementClaim::LEN
-}
-
-#[cfg(feature = "migration")]
+#[cfg(any(feature = "migration-full", feature = "migration-ledger"))]
 fn protocol_debt_ledger_needs_migration(account_len: usize) -> bool {
     account_len < ProtocolDebtLedger::LEN
 }
 
-#[cfg(feature = "migration")]
+#[cfg(any(feature = "migration-full", feature = "migration-ledger"))]
 fn cfg_bool(d: &[u8], o: usize) -> bool {
     d[o] != 0
 }
 
-#[cfg(feature = "migration")]
+#[cfg(any(
+    feature = "migration-payout",
+    feature = "migration-claim",
+    feature = "migration-ledger"
+))]
 fn legacy_pk(d: &[u8], o: usize) -> Pubkey {
     let mut bytes = [0u8; 32];
     bytes.copy_from_slice(&d[o..o + 32]);
     Pubkey::new_from_array(bytes)
 }
 
-#[cfg(feature = "migration")]
+#[cfg(any(
+    feature = "migration-payout",
+    feature = "migration-claim",
+    feature = "migration-ledger"
+))]
 fn legacy_u64(d: &[u8], o: usize) -> u64 {
     let mut bytes = [0u8; 8];
     bytes.copy_from_slice(&d[o..o + 8]);
     u64::from_le_bytes(bytes)
 }
 
-#[cfg(feature = "migration")]
+#[cfg(any(
+    feature = "migration-payout",
+    feature = "migration-claim",
+    feature = "migration-ledger"
+))]
 fn legacy_i64(d: &[u8], o: usize) -> i64 {
     let mut bytes = [0u8; 8];
     bytes.copy_from_slice(&d[o..o + 8]);
     i64::from_le_bytes(bytes)
 }
 
-#[cfg(feature = "migration")]
+#[cfg(any(feature = "migration-full", feature = "migration-ledger"))]
 fn deserialize_legacy_config_v1(data: &[u8]) -> Result<ConfigLegacyV1> {
     require!(
         data.len() >= LEGACY_CONFIG_V1_MIN_LEN,
@@ -6884,7 +6797,7 @@ fn deserialize_legacy_config_v1(data: &[u8]) -> Result<ConfigLegacyV1> {
     })
 }
 
-#[cfg(feature = "migration")]
+#[cfg(any(feature = "migration-full", feature = "migration-ledger"))]
 fn deserialize_legacy_pool_v1(data: &[u8]) -> Result<PoolLegacyV1> {
     require!(
         data.len() >= LEGACY_POOL_V1_MIN_LEN,
@@ -6909,32 +6822,52 @@ fn deserialize_legacy_pool_v1(data: &[u8]) -> Result<PoolLegacyV1> {
     })
 }
 
-#[cfg(feature = "migration")]
-fn deserialize_legacy_payout_ticket_v1(data: &[u8]) -> Result<PayoutTicketLegacyV1> {
+#[cfg(feature = "migration-payout")]
+fn build_payout_ticket_from_legacy_v1(ticket_key: Pubkey, data: &[u8]) -> Result<PayoutTicket> {
     require!(
         data.len() >= LEGACY_PAYOUT_TICKET_V1_MIN_LEN,
         SterlingError::InvalidAccount
     );
     let body = &data[8..];
-    Ok(PayoutTicketLegacyV1 {
+    let mint_in = legacy_pk(body, 97);
+    let amount_in = legacy_u64(body, 129);
+    let status = body[201];
+    let settled_ts = legacy_i64(body, 193);
+    let (escrow_authority, escrow_bump) = expected_ticket_escrow_authority(ticket_key);
+    let funding_state = if status == PAYOUT_TICKET_STATUS_SETTLED || settled_ts != 0 {
+        SOVEREIGN_ESCROW_STATE_SETTLED
+    } else {
+        SOVEREIGN_ESCROW_STATE_REQUESTED
+    };
+
+    Ok(PayoutTicket {
         pool: legacy_pk(body, 0),
         payout_mint: legacy_pk(body, 32),
         payout_kind: body[64],
         user: legacy_pk(body, 65),
-        mint_in: legacy_pk(body, 97),
-        amount_in: legacy_u64(body, 129),
+        mint_in,
+        amount_in,
         usd_micros: legacy_u64(body, 137),
         destination_ata: legacy_pk(body, 145),
+        escrow_mint: mint_in,
+        escrow_ata: expected_live_escrow_ata(escrow_authority, mint_in),
+        escrow_amount_locked: amount_in,
         nonce: legacy_u64(body, 177),
         created_ts: legacy_i64(body, 185),
-        settled_ts: legacy_i64(body, 193),
-        status: body[201],
+        settled_ts,
+        status,
+        funding_state,
+        escrow_bump,
+        route_hint: 0,
         bump: body[202],
     })
 }
 
-#[cfg(feature = "migration")]
-fn deserialize_legacy_settlement_claim_v1(data: &[u8]) -> Result<SettlementClaimLegacyV1> {
+#[cfg(feature = "migration-claim")]
+fn build_settlement_claim_from_legacy_v1(
+    claim_key: Pubkey,
+    data: &[u8],
+) -> Result<SettlementClaim> {
     require!(
         data.len() >= LEGACY_SETTLEMENT_CLAIM_V1_MIN_LEN,
         SterlingError::InvalidAccount
@@ -6942,27 +6875,48 @@ fn deserialize_legacy_settlement_claim_v1(data: &[u8]) -> Result<SettlementClaim
     let body = &data[8..];
     let mut proof_sig = [0u8; 64];
     proof_sig.copy_from_slice(&body[161..225]);
-    Ok(SettlementClaimLegacyV1 {
+    let mint_in = legacy_pk(body, 97);
+    let amount_in = legacy_u64(body, 129);
+    let due_atoms = legacy_u64(body, 145);
+    let paid_atoms = legacy_u64(body, 153);
+    let settled_ts = legacy_i64(body, 273);
+    let status = body[281];
+    let (escrow_authority, escrow_bump) = expected_claim_escrow_authority(claim_key);
+    let funding_state = if status == SETTLEMENT_CLAIM_STATUS_PAID
+        || settled_ts != 0
+        || (due_atoms > 0 && paid_atoms >= due_atoms)
+    {
+        SOVEREIGN_ESCROW_STATE_SETTLED
+    } else {
+        SOVEREIGN_ESCROW_STATE_REQUESTED
+    };
+
+    Ok(SettlementClaim {
         pool: legacy_pk(body, 0),
         payout_mint: legacy_pk(body, 32),
         payout_kind: body[64],
         user: legacy_pk(body, 65),
-        mint_in: legacy_pk(body, 97),
-        amount_in: legacy_u64(body, 129),
+        mint_in,
+        amount_in,
         usd_micros: legacy_u64(body, 137),
-        due_atoms: legacy_u64(body, 145),
-        paid_atoms: legacy_u64(body, 153),
+        due_atoms,
+        paid_atoms,
         proof_sig,
         destination_ata: legacy_pk(body, 225),
+        escrow_mint: mint_in,
+        escrow_ata: expected_live_escrow_ata(escrow_authority, mint_in),
+        escrow_amount_locked: amount_in,
         nonce: legacy_u64(body, 257),
         created_ts: legacy_i64(body, 265),
-        settled_ts: legacy_i64(body, 273),
-        status: body[281],
+        settled_ts,
+        status,
+        funding_state,
+        escrow_bump,
         bump: body[282],
     })
 }
 
-#[cfg(feature = "migration")]
+#[cfg(any(feature = "migration-full", feature = "migration-ledger"))]
 #[inline(never)]
 fn migrate_protocol_debt_ledger_data_from_legacy_v1(
     ledger_data: &mut [u8],
@@ -7011,7 +6965,7 @@ fn migrate_protocol_debt_ledger_data_from_legacy_v1(
     Ok(())
 }
 
-#[cfg(feature = "migration")]
+#[cfg(any(feature = "migration-full", feature = "migration-ledger"))]
 fn config_admin_pubkey(ai: &AccountInfo) -> Result<Pubkey> {
     let data = ai.try_borrow_data()?;
     require!(data.len() >= 8 + 32, SterlingError::InvalidAccount);
@@ -7020,7 +6974,7 @@ fn config_admin_pubkey(ai: &AccountInfo) -> Result<Pubkey> {
     Ok(Pubkey::new_from_array(bytes))
 }
 
-#[cfg(feature = "migration")]
+#[cfg(any(feature = "migration-full", feature = "migration-ledger"))]
 fn require_admin_on_config_info<'info>(
     config_ai: &AccountInfo<'info>,
     admin: &Signer<'info>,
@@ -7032,7 +6986,27 @@ fn require_admin_on_config_info<'info>(
     Ok(())
 }
 
-#[cfg(feature = "migration")]
+#[cfg(feature = "migration-full")]
+#[inline(never)]
+fn require_migration_config_admin<'info>(
+    config_ai: &AccountInfo<'info>,
+    admin: &Signer<'info>,
+    program_id: &Pubkey,
+) -> Result<()> {
+    let (expected_config, _) = Pubkey::find_program_address(&[b"config"], program_id);
+    require!(
+        config_ai.key() == expected_config,
+        SterlingError::InvalidAccount
+    );
+    require!(config_ai.owner == program_id, SterlingError::InvalidAccount);
+    require_admin_on_config_info(config_ai, admin)
+}
+
+#[cfg(any(
+    feature = "migration-payout",
+    feature = "migration-claim",
+    feature = "migration-ledger"
+))]
 fn realloc_program_account<'info>(
     account: &AccountInfo<'info>,
     payer: &Signer<'info>,
@@ -7063,7 +7037,7 @@ fn realloc_program_account<'info>(
     Ok(())
 }
 
-#[cfg(feature = "migration")]
+#[cfg(any(feature = "migration-full", feature = "migration-ledger"))]
 fn default_config_v2_state(admin: Pubkey, bump: u8) -> Config {
     Config {
         admin,
@@ -7128,7 +7102,7 @@ fn default_config_v2_state(admin: Pubkey, bump: u8) -> Config {
     }
 }
 
-#[cfg(feature = "migration")]
+#[cfg(any(feature = "migration-full", feature = "migration-ledger"))]
 fn build_config_from_legacy_v1(legacy: &ConfigLegacyV1, bump: u8) -> Config {
     let mut cfg = default_config_v2_state(legacy.admin, bump);
     cfg.true_cash = legacy.true_cash;
@@ -7151,7 +7125,7 @@ fn build_config_from_legacy_v1(legacy: &ConfigLegacyV1, bump: u8) -> Config {
     cfg
 }
 
-#[cfg(feature = "migration")]
+#[cfg(any(feature = "migration-full", feature = "migration-ledger"))]
 fn build_pool_from_legacy_v1(legacy: &PoolLegacyV1, bump: u8) -> Pool {
     Pool {
         owner: legacy.owner,
@@ -7180,81 +7154,6 @@ fn build_pool_from_legacy_v1(legacy: &PoolLegacyV1, bump: u8) -> Pool {
         total_quote_volume: 0,
         swap_count: 0,
         bump,
-    }
-}
-
-#[cfg(feature = "migration")]
-fn build_payout_ticket_from_legacy_v1(
-    ticket_key: Pubkey,
-    legacy: &PayoutTicketLegacyV1,
-) -> PayoutTicket {
-    let (escrow_authority, escrow_bump) = expected_ticket_escrow_authority(ticket_key);
-    let funding_state = if legacy.status == PAYOUT_TICKET_STATUS_SETTLED || legacy.settled_ts != 0 {
-        SOVEREIGN_ESCROW_STATE_SETTLED
-    } else {
-        SOVEREIGN_ESCROW_STATE_REQUESTED
-    };
-
-    PayoutTicket {
-        pool: legacy.pool,
-        payout_mint: legacy.payout_mint,
-        payout_kind: legacy.payout_kind,
-        user: legacy.user,
-        mint_in: legacy.mint_in,
-        amount_in: legacy.amount_in,
-        usd_micros: legacy.usd_micros,
-        destination_ata: legacy.destination_ata,
-        escrow_mint: legacy.mint_in,
-        escrow_ata: expected_live_escrow_ata(escrow_authority, legacy.mint_in),
-        escrow_amount_locked: legacy.amount_in,
-        nonce: legacy.nonce,
-        created_ts: legacy.created_ts,
-        settled_ts: legacy.settled_ts,
-        status: legacy.status,
-        funding_state,
-        escrow_bump,
-        route_hint: 0,
-        bump: legacy.bump,
-    }
-}
-
-#[cfg(feature = "migration")]
-fn build_settlement_claim_from_legacy_v1(
-    claim_key: Pubkey,
-    legacy: &SettlementClaimLegacyV1,
-) -> SettlementClaim {
-    let (escrow_authority, escrow_bump) = expected_claim_escrow_authority(claim_key);
-    let funding_state = if legacy.status == SETTLEMENT_CLAIM_STATUS_PAID
-        || legacy.settled_ts != 0
-        || (legacy.due_atoms > 0 && legacy.paid_atoms >= legacy.due_atoms)
-    {
-        SOVEREIGN_ESCROW_STATE_SETTLED
-    } else {
-        SOVEREIGN_ESCROW_STATE_REQUESTED
-    };
-
-    SettlementClaim {
-        pool: legacy.pool,
-        payout_mint: legacy.payout_mint,
-        payout_kind: legacy.payout_kind,
-        user: legacy.user,
-        mint_in: legacy.mint_in,
-        amount_in: legacy.amount_in,
-        usd_micros: legacy.usd_micros,
-        due_atoms: legacy.due_atoms,
-        paid_atoms: legacy.paid_atoms,
-        proof_sig: legacy.proof_sig,
-        destination_ata: legacy.destination_ata,
-        escrow_mint: legacy.mint_in,
-        escrow_ata: expected_live_escrow_ata(escrow_authority, legacy.mint_in),
-        escrow_amount_locked: legacy.amount_in,
-        nonce: legacy.nonce,
-        created_ts: legacy.created_ts,
-        settled_ts: legacy.settled_ts,
-        status: legacy.status,
-        funding_state,
-        escrow_bump,
-        bump: legacy.bump,
     }
 }
 
@@ -11749,6 +11648,35 @@ fn legacy_protocol_debt_lot_offset(index: usize) -> usize {
     protocol_debt_ledger_header_len() + (index * (8 + 32 + 8 + 8 + 8 + 1 + 1))
 }
 
+fn protocol_debt_ledger_pool_from_data(ledger_data: &[u8]) -> Result<Pubkey> {
+    require!(
+        ledger_data.len() >= protocol_debt_ledger_header_len(),
+        SterlingError::InvalidAccount
+    );
+    let mut bytes = [0u8; 32];
+    bytes.copy_from_slice(&ledger_data[8..40]);
+    Ok(Pubkey::new_from_array(bytes))
+}
+
+fn protocol_debt_ledger_overflow_from_data(ledger_data: &[u8]) -> Result<u64> {
+    require!(
+        ledger_data.len() >= protocol_debt_ledger_header_len(),
+        SterlingError::InvalidAccount
+    );
+    let mut bytes = [0u8; 8];
+    bytes.copy_from_slice(&ledger_data[48..56]);
+    Ok(u64::from_le_bytes(bytes))
+}
+
+fn store_protocol_debt_ledger_overflow(ledger_data: &mut [u8], value: u64) -> Result<()> {
+    require!(
+        ledger_data.len() >= protocol_debt_ledger_header_len(),
+        SterlingError::InvalidAccount
+    );
+    ledger_data[48..56].copy_from_slice(&value.to_le_bytes());
+    Ok(())
+}
+
 fn debt_legacy_pk(d: &[u8], o: usize) -> Result<Pubkey> {
     let end = o.saturating_add(32);
     require!(end <= d.len(), SterlingError::InvalidAccount);
@@ -11806,6 +11734,29 @@ fn protocol_debt_lot_from_legacy_slice(
         route_hint: legacy_lot[64],
         status,
     })
+}
+
+fn load_protocol_debt_lot_at_index(
+    ledger_data: &[u8],
+    index: usize,
+    pool_key: Pubkey,
+) -> Result<ProtocolDebtLot> {
+    require!(
+        index < PROTOCOL_DEBT_LEDGER_SLOTS,
+        SterlingError::InvalidAccount
+    );
+    if ledger_data.len() < ProtocolDebtLedger::LEN {
+        let start = legacy_protocol_debt_lot_offset(index);
+        let end = start + (8 + 32 + 8 + 8 + 8 + 1 + 1);
+        require!(end <= ledger_data.len(), SterlingError::InvalidAccount);
+        return protocol_debt_lot_from_legacy_slice(&ledger_data[start..end], pool_key);
+    }
+
+    let start = protocol_debt_lot_offset(index);
+    let end = start + ProtocolDebtLot::LEN;
+    require!(end <= ledger_data.len(), SterlingError::InvalidAccount);
+    ProtocolDebtLot::try_from_slice(&ledger_data[start..end])
+        .map_err(|_| error!(SterlingError::InvalidAccount))
 }
 
 fn load_protocol_debt_lot_from_legacy_ledger_data(
@@ -11893,6 +11844,90 @@ fn store_protocol_debt_ledger_last_ts(ledger_data: &mut [u8], value: i64) -> Res
     let end = start + 8;
     ledger_data[start..end].copy_from_slice(&value.to_le_bytes());
     Ok(())
+}
+
+fn initialize_protocol_debt_ledger_data(
+    ledger_data: &mut [u8],
+    pool_key: Pubkey,
+    bump: u8,
+) -> Result<()> {
+    require!(
+        ledger_data.len() >= ProtocolDebtLedger::LEN,
+        SterlingError::InvalidAccount
+    );
+    ledger_data.fill(0);
+    ledger_data[..8].copy_from_slice(
+        &<ProtocolDebtLedger as anchor_lang::Discriminator>::discriminator(),
+    );
+    ledger_data[8..40].copy_from_slice(pool_key.as_ref());
+    ledger_data[40..48].copy_from_slice(&1u64.to_le_bytes());
+    ledger_data[48..56].copy_from_slice(&0u64.to_le_bytes());
+    ledger_data[56..64].copy_from_slice(&0i64.to_le_bytes());
+    ledger_data[64] = bump;
+    Ok(())
+}
+
+fn settle_protocol_debt_lots_in_ledger_data(
+    pool: &mut Pool,
+    ledger_data: &mut [u8],
+    paid_usd_micros: u64,
+    now: i64,
+) -> Result<u64> {
+    require!(
+        pool.protocol_fee_debt_usd_micros >= paid_usd_micros,
+        SterlingError::InvalidAmount
+    );
+
+    let pool_key = protocol_debt_ledger_pool_from_data(ledger_data)?;
+    let mut remaining = paid_usd_micros;
+
+    for index in 0..PROTOCOL_DEBT_LEDGER_SLOTS {
+        if remaining == 0 {
+            break;
+        }
+        let mut lot = load_protocol_debt_lot_at_index(ledger_data, index, pool_key)?;
+        if !matches!(
+            lot.status,
+            PROTOCOL_DEBT_LOT_OPEN | PROTOCOL_DEBT_LOT_TICKETED
+        ) || lot.usd_micros == 0
+        {
+            continue;
+        }
+
+        if remaining >= lot.usd_micros {
+            remaining -= lot.usd_micros;
+            mark_protocol_debt_lot_settled(pool, &mut lot, now)?;
+        } else {
+            lot.usd_micros -= remaining;
+            pool.protocol_fee_debt_usd_micros -= remaining;
+            pool.protocol_fee_debt_last_ts = now;
+            remaining = 0;
+        }
+
+        store_protocol_debt_lot_into_ledger_data(ledger_data, index, &lot)?;
+    }
+
+    if remaining > 0 {
+        let mut overflow_usd_micros = protocol_debt_ledger_overflow_from_data(ledger_data)?;
+        require!(
+            overflow_usd_micros >= remaining,
+            SterlingError::InvalidAmount
+        );
+        let overflow_count_before = protocol_fee_debt_shard_count(overflow_usd_micros);
+        overflow_usd_micros -= remaining;
+        let overflow_count_after = protocol_fee_debt_shard_count(overflow_usd_micros);
+        store_protocol_debt_ledger_overflow(ledger_data, overflow_usd_micros)?;
+        pool.protocol_fee_debt_count = pool
+            .protocol_fee_debt_count
+            .saturating_sub(overflow_count_before.saturating_sub(overflow_count_after));
+        pool.protocol_fee_debt_usd_micros -= remaining;
+        pool.protocol_fee_debt_last_ts = now;
+        remaining = 0;
+    }
+
+    require!(remaining == 0, SterlingError::InvalidAmount);
+    store_protocol_debt_ledger_last_ts(ledger_data, now)?;
+    Ok(paid_usd_micros)
 }
 
 #[inline(never)]
@@ -13275,8 +13310,9 @@ pub struct ConfirmProtocolDebtLotLiveEscrowFunding<'info> {
     pub keeper: Signer<'info>,
     #[account(mut, seeds = [b"pool", pool.base_mint.as_ref(), pool.quote_mint.as_ref()], bump)]
     pub pool: Box<Account<'info, Pool>>,
-    #[account(mut, seeds = [b"protocol_debt", pool.key().as_ref()], bump)]
-    pub protocol_debt_ledger: Box<Account<'info, ProtocolDebtLedger>>,
+    /// CHECK: protocol debt ledger is parsed lazily to keep the temp claim build under SBF limits
+    #[account(mut, seeds = [b"protocol_debt", pool.key().as_ref()], bump, owner = crate::ID)]
+    pub protocol_debt_ledger: UncheckedAccount<'info>,
     #[account(mut)]
     pub source_escrow_ata: Box<Account<'info, TokenAccount>>,
 }
@@ -13289,8 +13325,9 @@ pub struct SettleProtocolFeeDebt<'info> {
     pub keeper: Signer<'info>,
     #[account(mut, seeds = [b"pool", pool.base_mint.as_ref(), pool.quote_mint.as_ref()], bump)]
     pub pool: Box<Account<'info, Pool>>,
-    #[account(mut, seeds = [b"protocol_debt", pool.key().as_ref()], bump)]
-    pub protocol_debt_ledger: Box<Account<'info, ProtocolDebtLedger>>,
+    /// CHECK: protocol debt ledger is parsed lazily to keep the temp claim build under SBF limits
+    #[account(mut, seeds = [b"protocol_debt", pool.key().as_ref()], bump, owner = crate::ID)]
+    pub protocol_debt_ledger: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
@@ -13308,6 +13345,7 @@ pub struct InitProtocolDebtLedger<'info> {
         bump,
         space = ProtocolDebtLedger::LEN
     )]
-    pub protocol_debt_ledger: Box<Account<'info, ProtocolDebtLedger>>,
+    /// CHECK: initialized and written manually to keep the temp claim build under SBF limits
+    pub protocol_debt_ledger: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
 }

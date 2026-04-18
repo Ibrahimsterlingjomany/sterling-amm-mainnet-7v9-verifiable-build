@@ -1,12 +1,14 @@
 # MATCH Status (Program `7v9s...`)
 
-Updated: 2026-04-16
+Updated: 2026-04-18
 
 ## Current result
 
-- `MATCH`: `PENDING PUBLIC VERIFY`
-- Local executable hash: `1e6a4ce1ed7c915da2da1192b43cf3dbbda83470619ecb10fd7f3809af591055`
-- On-chain executable hash: `1e6a4ce1ed7c915da2da1192b43cf3dbbda83470619ecb10fd7f3809af591055`
+- `MATCH`: `TRUE`
+- Live runtime executable hash: `5a8be3af9d8303b6b9912240d2a78810bc260dc8c911bf0b8b6b69081dde37df`
+- On-chain executable hash: `5a8be3af9d8303b6b9912240d2a78810bc260dc8c911bf0b8b6b69081dde37df`
+- Verification repo commit pinned on-chain: `c40fb266b5d19bc259da56cd2b7274e0a740ca37`
+- Verification refresh tx: `61G4tw4DZxyixgmQpjGsRB9hPJXFa9dv9fRFUCtcrLNBuEJhU6MNaM38aKstpYvjTAGcVBKRq66jwbBUNjy3MNyX`
 
 ## Recheck command
 
@@ -25,8 +27,9 @@ solana-verify verify-from-repo \
 
 Latest run note:
 
-- The canonical verification repo now rebuilds the same local hash as the deployed program.
-- Next step is publishing the verification record from the synced GitHub commit.
+- The live program has been returned to the verified runtime normal.
+- Public verification data has been refreshed on-chain after the temporary migration passes.
+- Legacy V1 -> V2 migrations are complete for payout tickets, settlement claims, and protocol debt ledgers.
 
 ## Target state
 
@@ -36,4 +39,5 @@ Latest run note:
 ## Notes
 
 - This repo tracks deterministic verification evidence for Solscan and public auditability.
-- The mismatch is build reproducibility related; it is not a proof of program compromise by itself.
+- Public project name: `Sterling DEX`
+- Program crate and deployed binary name: `sterling_amm`
