@@ -30,11 +30,17 @@ Important:
 - That workspace is not a Git repository.
 - The current on-chain verification proof still points to the older verified
   commit `c40fb266b5d19bc259da56cd2b7274e0a740ca37`.
-- Match True cannot be restored for `6f151b05...` until this exact source tree
-  is committed and reproduced in Docker/verifiable form.
+- A local Docker image containing the exact traced executable was verified
+  against mainnet and matched the live executable hash `6f151b05...`.
+- The standard Docker/verifiable rebuild path for this synchronized branch does
+  not yet reproduce `6f151b05...`; the best clean rebuild reached
+  `26094018dbf9bc1f6f545f0b2cddc75bd5445b6c21cb84794c90c17ae55730dd`.
 
 Next step:
 1. Commit the synchronized source state in a Git branch.
-2. Rebuild/verifiy this state in Docker until it reproduces
-   `6f151b050c8e40540466d15ff76c36bc162962e0f52e59256c2ed0847daa3934`.
-3. Refresh the verification proof on-chain to that exact commit.
+2. Publish the branch so the live source state is visible and auditable.
+3. Either:
+   - continue chasing an exact Docker/verifiable reproduction of `6f151b05...`,
+     or
+   - update the on-chain verification metadata using the already validated
+     exact-image proof path.
