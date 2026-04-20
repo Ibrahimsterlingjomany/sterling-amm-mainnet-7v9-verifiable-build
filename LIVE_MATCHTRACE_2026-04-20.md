@@ -35,6 +35,13 @@ Important:
 - The standard Docker/verifiable rebuild path for this synchronized branch does
   not yet reproduce `6f151b05...`; the best clean rebuild reached
   `26094018dbf9bc1f6f545f0b2cddc75bd5445b6c21cb84794c90c17ae55730dd`.
+- The same synchronized source tree *does* reproduce `6f151b05...` when built
+  with the official Solana `1.18.20` `cargo-build-sbf` toolchain.
+- The same synchronized source tree also reproduces `6f151b05...` inside the
+  public Docker base image `solanafoundation/solana-verifiable-build:1.18.20`.
+- Public verification parameters for the current live runtime therefore need:
+  - `--library-name sterling_amm`
+  - `--base-image solanafoundation/solana-verifiable-build:1.18.20`
 
 Next step:
 1. Commit the synchronized source state in a Git branch.
