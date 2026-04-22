@@ -3278,6 +3278,93 @@ pub mod sterling_amm {
         Ok(())
     }
 
+    pub fn reinvest_managed_liquidity(
+        ctx: Context<ReinvestManagedLiquidity>,
+        base_amount_in: u64,
+        quote_amount_in: u64,
+        min_lp_out: u64,
+    ) -> Result<()> {
+        crate::helpers::require_admin(&ctx.accounts.config, &ctx.accounts.admin)?;
+        require!(base_amount_in > 0, SterlingError::InvalidAmount);
+        require!(quote_amount_in > 0, SterlingError::InvalidAmount);
+        validate_managed_liquidity_accounts(
+            &ctx.accounts.pool,
+            ctx.accounts.config.key(),
+            ctx.accounts.source_base_ata.key(),
+            &ctx.accounts.source_base_ata,
+            ctx.accounts.source_quote_ata.key(),
+            &ctx.accounts.source_quote_ata,
+            &ctx.accounts.lp_receiver_ata,
+            ctx.accounts.base_vault.key(),
+            &ctx.accounts.base_vault,
+            ctx.accounts.quote_vault.key(),
+            &ctx.accounts.quote_vault,
+            ctx.accounts.lp_mint.key(),
+            &ctx.accounts.lp_mint,
+        )?;
+        require!(
+            ctx.accounts.source_base_ata.amount >= base_amount_in,
+            SterlingError::InsufficientFeeVaultBalance
+        );
+        require!(
+            ctx.accounts.source_quote_ata.amount >= quote_amount_in,
+            SterlingError::InsufficientFeeVaultBalance
+        );
+
+        let lp_out = compute_lp_out(
+            ctx.accounts.base_vault.amount,
+            ctx.accounts.quote_vault.amount,
+            ctx.accounts.lp_mint.supply,
+            base_amount_in,
+            quote_amount_in,
+        )?;
+
+        require!(lp_out > 0, SterlingError::ZeroLp);
+        require!(lp_out >= min_lp_out, SterlingError::SlippageExceeded);
+
+        let signer_seeds: &[&[&[u8]]] = &[&[b"config", &[ctx.bumps.config]]];
+
+        transfer_tokens_signed(
+            &ctx.accounts.token_program,
+            ctx.accounts.source_base_ata.to_account_info(),
+            ctx.accounts.base_vault.to_account_info(),
+            ctx.accounts.config.to_account_info(),
+            signer_seeds,
+            base_amount_in,
+        )?;
+        transfer_tokens_signed(
+            &ctx.accounts.token_program,
+            ctx.accounts.source_quote_ata.to_account_info(),
+            ctx.accounts.quote_vault.to_account_info(),
+            ctx.accounts.config.to_account_info(),
+            signer_seeds,
+            quote_amount_in,
+        )?;
+        mint_tokens_signed(
+            &ctx.accounts.token_program,
+            ctx.accounts.lp_mint.to_account_info(),
+            ctx.accounts.lp_receiver_ata.to_account_info(),
+            ctx.accounts.config.to_account_info(),
+            signer_seeds,
+            lp_out,
+        )?;
+
+        emit!(ManagedLiquidityReinvested {
+            pool: ctx.accounts.pool.key(),
+            source_base_account: ctx.accounts.source_base_ata.key(),
+            source_quote_account: ctx.accounts.source_quote_ata.key(),
+            lp_receiver_ata: ctx.accounts.lp_receiver_ata.key(),
+            base_mint: ctx.accounts.pool.base_mint,
+            quote_mint: ctx.accounts.pool.quote_mint,
+            base_amount_in,
+            quote_amount_in,
+            lp_amount_out: lp_out,
+            ts: Clock::get()?.unix_timestamp,
+        });
+
+        Ok(())
+    }
+
     pub fn remove_liquidity(
         ctx: Context<RemoveLiquidity>,
         lp_amount_in: u64,
@@ -3661,6 +3748,185 @@ pub mod sterling_amm {
             usdc_released: target_usdc_out,
             usdc_coffre: ctx.accounts.usdc_coffre_ata.key(),
             treasury_usdc_ata: ctx.accounts.treasury_usdc_ata.key(),
+            ts: Clock::get()?.unix_timestamp,
+        });
+
+        Ok(())
+    }
+
+    pub fn reinvest_fee_vault_to_usdc_pair_fragmented(
+        ctx: Context<ReinvestFeeVaultToUsdcPair>,
+        fee_side: FeeSide,
+        target_usdc_amount_in: u64,
+        target_fee_amount_in: u64,
+        min_lp_out: u64,
+    ) -> Result<()> {
+        crate::helpers::require_admin(&ctx.accounts.config, &ctx.accounts.admin)?;
+        require!(target_usdc_amount_in > 0, SterlingError::InvalidAmount);
+        require!(target_fee_amount_in > 0, SterlingError::InvalidAmount);
+        require!(
+            ctx.accounts.fee_mint.key() != ctx.accounts.config.usdc_mint,
+            SterlingError::InvalidAccount
+        );
+        require!(
+            ctx.accounts.asset_registry.mint == ctx.accounts.fee_mint.key(),
+            SterlingError::FeeAssetRegistryMissing
+        );
+        require!(
+            ctx.accounts.asset_registry.active,
+            SterlingError::FeeAssetRegistryInactive
+        );
+        require!(
+            ctx.accounts.asset_registry.decimals == ctx.accounts.fee_mint.decimals,
+            SterlingError::InvalidAccount
+        );
+        require!(
+            ctx.accounts.usdc_coffre_ata.key() == ctx.accounts.config.usdc_coffre,
+            SterlingError::UsdcSettlementVaultMismatch
+        );
+        require!(
+            ctx.accounts.usdc_coffre_ata.mint == ctx.accounts.config.usdc_mint,
+            SterlingError::UsdcSettlementVaultMismatch
+        );
+
+        validate_fee_vault_reinvest_target_accounts(
+            &ctx.accounts.target_pool,
+            ctx.accounts.config.usdc_mint,
+            ctx.accounts.fee_mint.key(),
+            ctx.accounts.target_base_vault.key(),
+            &ctx.accounts.target_base_vault,
+            ctx.accounts.target_quote_vault.key(),
+            &ctx.accounts.target_quote_vault,
+            ctx.accounts.target_lp_mint.key(),
+            &ctx.accounts.target_lp_mint,
+            &ctx.accounts.lp_receiver_ata,
+        )?;
+
+        let (source_vault, source_key) = match fee_side {
+            FeeSide::Base => {
+                require!(
+                    ctx.accounts.fee_mint.key() == ctx.accounts.source_pool.base_mint,
+                    SterlingError::InvalidAccount
+                );
+                (
+                    &ctx.accounts.fee_vault_base,
+                    ctx.accounts.source_pool.fee_vault_base,
+                )
+            }
+            FeeSide::Quote => {
+                require!(
+                    ctx.accounts.fee_mint.key() == ctx.accounts.source_pool.quote_mint,
+                    SterlingError::InvalidAccount
+                );
+                (
+                    &ctx.accounts.fee_vault_quote,
+                    ctx.accounts.source_pool.fee_vault_quote,
+                )
+            }
+        };
+
+        require!(
+            source_vault.key() == source_key,
+            SterlingError::InvalidAccount
+        );
+        require!(
+            source_vault.mint == ctx.accounts.fee_mint.key(),
+            SterlingError::InvalidAccount
+        );
+
+        let burn_amount = compute_fee_amount_for_target_usdc_out_ceil(
+            target_usdc_amount_in,
+            ctx.accounts.asset_registry.valuation_usd_micros,
+            ctx.accounts.fee_mint.decimals,
+        )?;
+        require!(burn_amount > 0, SterlingError::ZeroUsdcSettlement);
+        let total_fee_amount = target_fee_amount_in
+            .checked_add(burn_amount)
+            .ok_or(SterlingError::MathOverflow)?;
+        require!(
+            source_vault.amount >= total_fee_amount,
+            SterlingError::InsufficientFeeVaultBalance
+        );
+        require!(
+            ctx.accounts.usdc_coffre_ata.amount >= target_usdc_amount_in,
+            SterlingError::InsufficientUsdcSettlementLiquidity
+        );
+
+        let fee_to_base = ctx.accounts.target_pool.base_mint == ctx.accounts.fee_mint.key();
+        let (base_amount_in, quote_amount_in, target_fee_vault, target_usdc_vault) = if fee_to_base
+        {
+            (
+                target_fee_amount_in,
+                target_usdc_amount_in,
+                ctx.accounts.target_base_vault.to_account_info(),
+                ctx.accounts.target_quote_vault.to_account_info(),
+            )
+        } else {
+            (
+                target_usdc_amount_in,
+                target_fee_amount_in,
+                ctx.accounts.target_quote_vault.to_account_info(),
+                ctx.accounts.target_base_vault.to_account_info(),
+            )
+        };
+
+        let lp_out = compute_lp_out(
+            ctx.accounts.target_base_vault.amount,
+            ctx.accounts.target_quote_vault.amount,
+            ctx.accounts.target_lp_mint.supply,
+            base_amount_in,
+            quote_amount_in,
+        )?;
+
+        require!(lp_out > 0, SterlingError::ZeroLp);
+        require!(lp_out >= min_lp_out, SterlingError::SlippageExceeded);
+
+        let signer_seeds: &[&[&[u8]]] = &[&[b"config", &[ctx.bumps.config]]];
+
+        transfer_tokens_signed(
+            &ctx.accounts.token_program,
+            source_vault.to_account_info(),
+            target_fee_vault,
+            ctx.accounts.config.to_account_info(),
+            signer_seeds,
+            target_fee_amount_in,
+        )?;
+        burn_tokens_signed(
+            &ctx.accounts.token_program,
+            ctx.accounts.fee_mint.to_account_info(),
+            source_vault.to_account_info(),
+            ctx.accounts.config.to_account_info(),
+            signer_seeds,
+            burn_amount,
+        )?;
+        transfer_tokens_signed(
+            &ctx.accounts.token_program,
+            ctx.accounts.usdc_coffre_ata.to_account_info(),
+            target_usdc_vault,
+            ctx.accounts.config.to_account_info(),
+            signer_seeds,
+            target_usdc_amount_in,
+        )?;
+        mint_tokens_signed(
+            &ctx.accounts.token_program,
+            ctx.accounts.target_lp_mint.to_account_info(),
+            ctx.accounts.lp_receiver_ata.to_account_info(),
+            ctx.accounts.config.to_account_info(),
+            signer_seeds,
+            lp_out,
+        )?;
+
+        emit!(FeeVaultLiquidityReinvested {
+            source_pool: ctx.accounts.source_pool.key(),
+            target_pool: ctx.accounts.target_pool.key(),
+            fee_vault: source_vault.key(),
+            lp_receiver_ata: ctx.accounts.lp_receiver_ata.key(),
+            fee_mint: ctx.accounts.fee_mint.key(),
+            fee_side,
+            fee_amount_direct: target_fee_amount_in,
+            fee_amount_burned: burn_amount,
+            usdc_amount_in: target_usdc_amount_in,
+            lp_amount_out: lp_out,
             ts: Clock::get()?.unix_timestamp,
         });
 
@@ -5782,6 +6048,28 @@ pub struct AddLiquidity<'info> {
 }
 
 #[derive(Accounts)]
+pub struct ReinvestManagedLiquidity<'info> {
+    #[account(mut, seeds = [b"config"], bump)]
+    pub config: Box<Account<'info, Config>>,
+    pub admin: Signer<'info>,
+    #[account(mut, seeds = [b"pool", pool.base_mint.as_ref(), pool.quote_mint.as_ref()], bump)]
+    pub pool: Box<Account<'info, Pool>>,
+    #[account(mut)]
+    pub source_base_ata: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    pub source_quote_ata: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    pub lp_receiver_ata: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    pub base_vault: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    pub quote_vault: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    pub lp_mint: Box<Account<'info, Mint>>,
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
 pub struct RemoveLiquidity<'info> {
     #[account(mut, seeds = [b"config"], bump)]
     pub config: Box<Account<'info, Config>>,
@@ -5927,6 +6215,44 @@ pub struct ConvertFeesToUsdc<'info> {
 
     #[account(mut)]
     pub treasury_usdc_ata: Box<Account<'info, TokenAccount>>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct ReinvestFeeVaultToUsdcPair<'info> {
+    #[account(mut, seeds = [b"config"], bump)]
+    pub config: Box<Account<'info, Config>>,
+    pub admin: Signer<'info>,
+
+    #[account(mut, seeds = [b"pool", source_pool.base_mint.as_ref(), source_pool.quote_mint.as_ref()], bump)]
+    pub source_pool: Box<Account<'info, Pool>>,
+
+    #[account(mut)]
+    pub fee_vault_base: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    pub fee_vault_quote: Box<Account<'info, TokenAccount>>,
+
+    #[account(mut)]
+    pub fee_mint: Box<Account<'info, Mint>>,
+
+    #[account(seeds = [b"asset", fee_mint.key().as_ref()], bump)]
+    pub asset_registry: Box<Account<'info, AssetRegistry>>,
+
+    #[account(mut)]
+    pub usdc_coffre_ata: Box<Account<'info, TokenAccount>>,
+
+    #[account(mut, seeds = [b"pool", target_pool.base_mint.as_ref(), target_pool.quote_mint.as_ref()], bump)]
+    pub target_pool: Box<Account<'info, Pool>>,
+
+    #[account(mut)]
+    pub lp_receiver_ata: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    pub target_base_vault: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    pub target_quote_vault: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    pub target_lp_mint: Box<Account<'info, Mint>>,
 
     pub token_program: Program<'info, Token>,
 }
@@ -6319,6 +6645,35 @@ pub struct LiquidityAdded {
     pub quote_mint: Pubkey,
     pub base_amount_in: u64,
     pub quote_amount_in: u64,
+    pub lp_amount_out: u64,
+    pub ts: i64,
+}
+
+#[event]
+pub struct ManagedLiquidityReinvested {
+    pub pool: Pubkey,
+    pub source_base_account: Pubkey,
+    pub source_quote_account: Pubkey,
+    pub lp_receiver_ata: Pubkey,
+    pub base_mint: Pubkey,
+    pub quote_mint: Pubkey,
+    pub base_amount_in: u64,
+    pub quote_amount_in: u64,
+    pub lp_amount_out: u64,
+    pub ts: i64,
+}
+
+#[event]
+pub struct FeeVaultLiquidityReinvested {
+    pub source_pool: Pubkey,
+    pub target_pool: Pubkey,
+    pub fee_vault: Pubkey,
+    pub lp_receiver_ata: Pubkey,
+    pub fee_mint: Pubkey,
+    pub fee_side: FeeSide,
+    pub fee_amount_direct: u64,
+    pub fee_amount_burned: u64,
+    pub usdc_amount_in: u64,
     pub lp_amount_out: u64,
     pub ts: i64,
 }
@@ -10897,7 +11252,7 @@ fn validate_liquidity_accounts(
     quote_vault_key: Pubkey,
     quote_vault: &TokenAccount,
     lp_mint_key: Pubkey,
-    lp_mint: &Mint,
+    _lp_mint: &Mint,
 ) -> Result<()> {
     require!(pool.active, SterlingError::InactivePool);
     require!(user_base_ata.owner == user, SterlingError::InvalidAccount);
@@ -10930,6 +11285,115 @@ fn validate_liquidity_accounts(
     );
     require!(
         quote_vault.mint == pool.quote_mint,
+        SterlingError::InvalidAccount
+    );
+    Ok(())
+}
+
+fn validate_managed_liquidity_accounts(
+    pool: &Pool,
+    config_key: Pubkey,
+    source_base_key: Pubkey,
+    source_base_ata: &TokenAccount,
+    source_quote_key: Pubkey,
+    source_quote_ata: &TokenAccount,
+    lp_receiver_ata: &TokenAccount,
+    base_vault_key: Pubkey,
+    base_vault: &TokenAccount,
+    quote_vault_key: Pubkey,
+    quote_vault: &TokenAccount,
+    lp_mint_key: Pubkey,
+    _lp_mint: &Mint,
+) -> Result<()> {
+    require!(pool.active, SterlingError::InactivePool);
+    require!(
+        source_base_ata.owner == config_key,
+        SterlingError::InvalidAccount
+    );
+    require!(
+        source_quote_ata.owner == config_key,
+        SterlingError::InvalidAccount
+    );
+    require!(
+        source_base_ata.mint == pool.base_mint,
+        SterlingError::InvalidAccount
+    );
+    require!(
+        source_quote_ata.mint == pool.quote_mint,
+        SterlingError::InvalidAccount
+    );
+    require!(
+        lp_receiver_ata.mint == lp_mint_key,
+        SterlingError::InvalidAccount
+    );
+    require!(
+        base_vault_key == pool.base_vault,
+        SterlingError::InvalidAccount
+    );
+    require!(
+        quote_vault_key == pool.quote_vault,
+        SterlingError::InvalidAccount
+    );
+    require!(lp_mint_key == pool.lp_mint, SterlingError::InvalidAccount);
+    require!(
+        source_base_key != base_vault_key,
+        SterlingError::InvalidAccount
+    );
+    require!(
+        source_quote_key != quote_vault_key,
+        SterlingError::InvalidAccount
+    );
+    require!(
+        base_vault.mint == pool.base_mint,
+        SterlingError::InvalidAccount
+    );
+    require!(
+        quote_vault.mint == pool.quote_mint,
+        SterlingError::InvalidAccount
+    );
+    Ok(())
+}
+
+fn validate_fee_vault_reinvest_target_accounts(
+    target_pool: &Pool,
+    usdc_mint: Pubkey,
+    fee_mint: Pubkey,
+    target_base_vault_key: Pubkey,
+    target_base_vault: &TokenAccount,
+    target_quote_vault_key: Pubkey,
+    target_quote_vault: &TokenAccount,
+    target_lp_mint_key: Pubkey,
+    _target_lp_mint: &Mint,
+    lp_receiver_ata: &TokenAccount,
+) -> Result<()> {
+    require!(target_pool.active, SterlingError::InactivePool);
+    require!(
+        (target_pool.base_mint == fee_mint && target_pool.quote_mint == usdc_mint)
+            || (target_pool.base_mint == usdc_mint && target_pool.quote_mint == fee_mint),
+        SterlingError::InvalidAccount
+    );
+    require!(
+        target_base_vault_key == target_pool.base_vault,
+        SterlingError::InvalidAccount
+    );
+    require!(
+        target_quote_vault_key == target_pool.quote_vault,
+        SterlingError::InvalidAccount
+    );
+    require!(
+        target_lp_mint_key == target_pool.lp_mint,
+        SterlingError::InvalidAccount
+    );
+    require!(
+        target_base_vault.mint == target_pool.base_mint,
+        SterlingError::InvalidAccount
+    );
+    require!(
+        target_quote_vault.mint == target_pool.quote_mint,
+        SterlingError::InvalidAccount
+    );
+    require!(
+        lp_receiver_ata.mint == target_lp_mint_key,
         SterlingError::InvalidAccount
     );
     Ok(())
