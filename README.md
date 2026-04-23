@@ -1,10 +1,10 @@
-# sterling_amm_mainnet_7v9 verifiable build workspace
+# sterling_amm 7v9 verifiable build workspace
 
 Clean and isolated workspace for deterministic verification of the deployed Solana program.
 
 ## Canonical identifiers
 
-- Program name: `sterling_amm_mainnet`
+- Program crate/library: `sterling_amm`
 - Program ID: `7v9sLrk92NNLLUfXLJw3o7MycZNvwsTK6kLWfWb8vcVA`
 - Upgrade authority: `CMqD45Kq5oukPvaMDhzav5RxJqZb1xME1MmV71CzCeTw`
 - Workspace path: `verifiable-build/sterling_amm_mainnet_7v9`
@@ -15,7 +15,7 @@ This workspace is intentionally separated from the legacy mono-workspace to avoi
 
 Produce `MATCH: TRUE` between:
 
-- local executable hash from `target/deploy/sterling_amm_mainnet.so`
+- local executable hash from `target/deploy/sterling_amm.so`
 - on-chain executable hash for program `7v9s...`
 
 ## Quick status

@@ -11,7 +11,7 @@ fi
 
 if [ ! -f "$TARGET_SO_PATH" ]; then
   echo "ERROR: missing local binary: $TARGET_SO_PATH" >&2
-  echo "Run: solana-verify build . --library-name sterling_amm_mainnet" >&2
+  echo "Run: solana-verify build . --library-name sterling_amm" >&2
   exit 1
 fi
 
