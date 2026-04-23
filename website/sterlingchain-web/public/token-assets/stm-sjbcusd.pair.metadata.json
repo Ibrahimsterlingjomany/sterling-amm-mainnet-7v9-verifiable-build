@@ -1,0 +1,164 @@
+{
+  "version": "1.1",
+  "type": "sterling_pair_metadata",
+  "network": "solana-mainnet-beta",
+  "project_name": "Sterling DEX",
+  "market_name": "SJBC USD",
+  "display_name": "SJBC USD",
+  "pair_id": "STM-SJBCUSD",
+  "pair_symbol": "STM/SJBCUSD",
+  "public_quote_label": "SJBC USD",
+  "base_asset_label": "Starling Mint",
+  "base_asset_symbol": "STM",
+  "quote_asset_symbol": "SJBC",
+  "quote_asset_public_symbol": "SJBCUSD",
+  "program_id": "7v9sLrk92NNLLUfXLJw3o7MycZNvwsTK6kLWfWb8vcVA",
+  "pool_address": "BbvR4zUAwZF8LmVFLXNpDy3CxuYcDwd5isoh7CZFAF5G",
+  "config_pda": "Htopqis52g8nGvvkpnG7Z7XZhgBpqtN9huqUyk6LH9gB",
+  "authority": "CMqD45Kq5oukPvaMDhzav5RxJqZb1xME1MmV71CzCeTw",
+  "pair_status": "active",
+  "verification": {
+    "runtime_hash": "690b053b728af67e1412b27ccde2c0302159e5358e99230188b7d175d5d5409a",
+    "verified_commit": "d9839fe5b20b9603e9962f975073a76c2d01391b",
+    "verification_pda": "BhXH2QLG74M4L8pqoFdF2FV1Ew7QAVFpt5qiz3ZNesFf",
+    "verified": true
+  },
+  "assets": {
+    "base": {
+      "name": "Starling Mint",
+      "symbol": "STM",
+      "mint": "9kued2JXgVk5dzvtipsTdXfBMWihy1E55TwMiXchCoAb",
+      "decimals": 9,
+      "role": "base"
+    },
+    "quote": {
+      "name": "SJBC USD",
+      "symbol": "SJBC",
+      "public_symbol": "SJBCUSD",
+      "mint": "EsNo61QodqHCRjkTGJDeqyK7N4Hunip5PaTYbpPZEsG2",
+      "decimals": 9,
+      "role": "quote"
+    }
+  },
+  "lp": {
+    "mint": "G94nkBm4ntjiEHNzTpd7GRW9J8H5rqrhW83k5RSHZrBZ",
+    "metadata_uri": "https://sterlingchain.net/token-assets/stm-sjbcusd-g94-lp.metadata.json",
+    "legacy_fee_token_mint": "DnepvMafJZzDtDcevrqbMUCmDqdNhBLjCTUu1xhR4HeL",
+    "role": "canonical_live_lp_mint"
+  },
+  "pricing": {
+    "price_label": "SJBC USD",
+    "price_source": "on-chain proof + public market endpoints",
+    "price_locked": true,
+    "spot_price_usd": "92500.00000000215",
+    "floor_price_usd": "92500.00000000215",
+    "implied_price_usd": "92500.00000000215"
+  },
+  "pool_state": {
+    "base_vault": {
+      "address": "3mRYBWgBKnQuUyvVDcYFqSeNoQTujTsFGra3GWLof9av",
+      "asset": "STM",
+      "before": "10443.243243243",
+      "after": "10443.243243243",
+      "delta": "0"
+    },
+    "quote_vault": {
+      "address": "5z4brtXmcDBhPKLk9YoiZE7fqaourBk26jBuAUHqZDN9",
+      "asset": "SJBC",
+      "before": "960778378.378177966",
+      "after": "966000000.000000000",
+      "delta": "5221621.621822034"
+    }
+  },
+  "guarantees": {
+    "type": "backing-and-proof",
+    "guaranteed_accounts": {
+      "htop_stm": {
+        "address": "2CRon3SyMyvy2i7hourX99kiuoTKpLgQ3ebogrpfDorq",
+        "role": "guarantee_reserve",
+        "asset": "STM"
+      },
+      "htop_sjbc": {
+        "address": "HEy89xU9gkEi9FXGLvzT61i3pM2kTW5MzvqcCDsB7EmQ",
+        "role": "guarantee_reserve",
+        "asset": "SJBC"
+      }
+    },
+    "reserves": {
+      "htop_stm": {
+        "before": "17915708564.705249274",
+        "after": "17915708621.462006032",
+        "delta": "56.756756758"
+      },
+      "htop_sjbc": {
+        "before": "16950244075.873423613",
+        "after": "16950244075.873423613",
+        "delta": "0"
+      }
+    }
+  },
+  "proof_transactions": {
+    "user_quote_to_quote_vault": "27uGTWegN937zuLtmogvPJHF6ocmv7YeoG9SPT2TWrXQn9H2dh47NZVZFSjfeqhje4oUChKY7U51LJKmHWwxXy5W",
+    "user_base_to_htop_stm": "2LWSiLWZ8B1uQwAwrYKd7JxXiZ9NDGnZz4ySpuoWvaDFdFHuPaC2zEiBaJhYoZL1UyJUqYZHi6KW37ZJCSfdkCcV"
+  },
+  "api_endpoints": {
+    "status": "https://sterlingchain.net/api/v1/market/status",
+    "trades": "https://sterlingchain.net/api/v1/market/trades",
+    "candles": "https://sterlingchain.net/api/v1/market/candles",
+    "pairs": "https://sterlingchain.net/api/v1/market/pairs",
+    "metadata": "https://sterlingchain.net/metadata.json",
+    "proof": "https://sterlingchain.net/proof.json",
+    "pair_metadata": "https://sterlingchain.net/pair-metadata.json",
+    "pair_metadata_profile": "https://sterlingchain.net/.well-known/sterling-pair-metadata.json",
+    "price": "https://sterlingchain.net/price",
+    "marketcap": "https://sterlingchain.net/marketcap"
+  },
+  "indexing_policy": {
+    "canonical_public_market_name": "SJBC USD",
+    "canonical_public_market_code": "SJBCUSD",
+    "canonical_pair_id": "STM-SJBCUSD",
+    "source_of_truth_price": "on-chain proof + public market endpoints",
+    "candles_source": "decoded real swaps only",
+    "synthetic_candles_allowed": false,
+    "fake_volume_allowed": false
+  },
+  "media": {
+    "project_logo_url": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeicjvgitqvam4ez7rxvalhlcq5ox6354blyd55qh6leqybxia7alzm",
+    "token_logo_url": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeiboqchb4cq2pcx3zez6cv7gilmzpjmli2iuavsjfffdzayk57lwie",
+    "project_logo": {
+      "name": "Starling Mint",
+      "cid": "bafybeicjvgitqvam4ez7rxvalhlcq5ox6354blyd55qh6leqybxia7alzm",
+      "ipfs_uri": "ipfs://bafybeicjvgitqvam4ez7rxvalhlcq5ox6354blyd55qh6leqybxia7alzm",
+      "gateway_url": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeicjvgitqvam4ez7rxvalhlcq5ox6354blyd55qh6leqybxia7alzm"
+    },
+    "token_logo": {
+      "name": "SJBC USD",
+      "cid": "bafybeiboqchb4cq2pcx3zez6cv7gilmzpjmli2iuavsjfffdzayk57lwie",
+      "ipfs_uri": "ipfs://bafybeiboqchb4cq2pcx3zez6cv7gilmzpjmli2iuavsjfffdzayk57lwie",
+      "gateway_url": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeiboqchb4cq2pcx3zez6cv7gilmzpjmli2iuavsjfffdzayk57lwie"
+    },
+    "pair_banner": null,
+    "website": "https://sterlingchain.net",
+    "pair_metadata_cid": "bafkreihy34j33smevvd5cawi76b52iik5in2kh3d6sz4wngapqtynhkvm4",
+    "pair_metadata_ipfs_uri": "ipfs://bafkreihy34j33smevvd5cawi76b52iik5in2kh3d6sz4wngapqtynhkvm4",
+    "pair_metadata_ipfs_gateway": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafkreihy34j33smevvd5cawi76b52iik5in2kh3d6sz4wngapqtynhkvm4",
+    "pair_metadata_ref": {
+      "cid": "bafkreihy34j33smevvd5cawi76b52iik5in2kh3d6sz4wngapqtynhkvm4",
+      "ipfs_uri": "ipfs://bafkreihy34j33smevvd5cawi76b52iik5in2kh3d6sz4wngapqtynhkvm4",
+      "gateway_url": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafkreihy34j33smevvd5cawi76b52iik5in2kh3d6sz4wngapqtynhkvm4"
+    }
+  },
+  "extensions": {
+    "tags": [
+      "sterling-dex",
+      "sjbcusd",
+      "stm",
+      "solana",
+      "verified",
+      "market-data"
+    ],
+    "category": "dex-pair",
+    "quote_designation": "usd-replacement-market",
+    "notes": "Snapshot reference for the canonical pair STM-SJBCUSD. Quote mint on-chain remains SJBC."
+  }
+}

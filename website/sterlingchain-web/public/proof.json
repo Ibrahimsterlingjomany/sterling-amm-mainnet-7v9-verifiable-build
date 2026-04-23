@@ -1,0 +1,93 @@
+{
+  "version": "1.0",
+  "type": "sterling_routing_proof",
+  "network": "solana-mainnet-beta",
+  "project_name": "Sterling DEX",
+  "program_id": "7v9sLrk92NNLLUfXLJw3o7MycZNvwsTK6kLWfWb8vcVA",
+  "authority": "CMqD45Kq5oukPvaMDhzav5RxJqZb1xME1MmV71CzCeTw",
+  "contract_upgrade_performed": true,
+  "routing_pools": [
+    {
+      "pair_id": "STM-USDC",
+      "pool_id": "DBZA9ZYg3MAZtc2Q5vxis4gQEL1RVgCfshDeEEwLUih5",
+      "lp_mint": "7DE91Pj9FnocsgXVqrHGRjzFt9zkNr3iRW9samdiyACr",
+      "display_logo_uri": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeicjvgitqvam4ez7rxvalhlcq5ox6354blyd55qh6leqybxia7alzm",
+      "quote_logo_uri": "https://sterlingchain.net/token-assets/usdc.svg",
+      "lp_metadata_uri": "https://sterlingchain.net/token-assets/usdc-stm-lp.metadata.json",
+      "transactions": {
+        "create_pool": "2w4ggUTsqMagcSYTwRU2PiwNgenGwxebrP3E6MQUa92CeYXJVttgV4qVAnCDKDrEij9ykQfvWW3vJJTDwjC3n2wX",
+        "init_pool_base_vault": "4Cqj73oivu37UYVwehiQo2pwN5zPm7ejkWZWU4WSfBdcRixNqMY5brkiguE7QEJ8DB535b1h7jA9DC14nnUYfRU7",
+        "init_pool_quote_vault": "2WX1C3jEHmu2obiSW6WP1T5MA9sZuNQQrgfJNetTQ9Vm1jrzTwdyZckWhvhqYs5pXQz1jLDZt3NEWUv3F4KBUGA6",
+        "init_pool_lp_mint": "63SAqV9cjGuy15o9prC4cVy1inLGfMyUzxCjdhVN2h2EwVkrQMWSBRNbp1Tm28TRefBhhA3zHvNkZ6F5aRcPgheo",
+        "create_lp_ata": "3KZVrARTGxsWFfH4nFyvuEqHNDPY5pk8aHQjqP2xNhr4mULPuK94A7Y1F3rgtz8uAdnL8erwqa3D2dnWBvj2PSis",
+        "add_liquidity": "2xeVEHNwUsDqYsy2KbvwWSjX2Dstpoh9LY1FEa4nLHZW9h5eHcho8yK7iWTkBQWQdd1c3wns8fCYniwSHswvsLTQ"
+      },
+      "bootstrap_liquidity": {
+        "base_amount": "0.000108108",
+        "quote_amount": "10",
+        "quoted_price": "92500.0925",
+        "quoted_price_unit": "USDC per STM"
+      }
+    },
+    {
+      "pair_id": "SJBC-USDC",
+      "pool_id": "9dBirT3kZvxREMNRn9E9hf5izWAkGCFkzGnTrFkKZYNe",
+      "lp_mint": "2rrGfPpcERwtoQ7UrTZp5HV3zvN5jf76WXERBHXG9oNL",
+      "display_logo_uri": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeiboqchb4cq2pcx3zez6cv7gilmzpjmli2iuavsjfffdzayk57lwie",
+      "quote_logo_uri": "https://sterlingchain.net/token-assets/usdc.svg",
+      "lp_metadata_uri": "https://sterlingchain.net/token-assets/sjbc-usdc-lp.metadata.json",
+      "transactions": {
+        "create_pool": "5HspwWHKZ3RPSdPDBa4pGfurJrMJrMKiJ94MHTvmHzJ6muoMsJ3caKtsVcgAbGuLsDQk93HskMFevYLnEF7AYqvb",
+        "init_pool_base_vault": "5i3PBD2M74gp6MPeNqgjj3AtYntqi4cuoauvhGrtaKfoXP2QKXZwQz1PKXaPZwPqxmaLPFhU8PJ7y9gqxvCFGH9b",
+        "init_pool_quote_vault": "29V2BMj2dhRoFjqGVuJoHUfpxeByCkVbJCCxq7ckyiwbFj6AMpnG5XVNwJ7XbUd9EKCw3xu6N6DHABeuewzfm7nY",
+        "init_pool_lp_mint": "2gDTEXtwhdzqPRTmGptonAxgYZb3NV2MJ5nimCjLdFQSLrKvdbdZju8GT6wNJVJNx8USCQry3KSsWVcFA19BMFya",
+        "create_lp_ata": "4Srbo92VEgUXZbmMkZCoupR8DF53mJ9bzDurbXg25Z2fVZKYBrdD4Ye8PxiWij5oP9Y13DRMwifBE7hZZYXRppvL",
+        "add_liquidity": "ypfT7xuGVnNiwUxk1nHXfDDUcDC6C8Sbh2FW7Wug1ZE1pQBzYNAo2qzU77YeU7Er7rN4oMRqTb1KLYvBp3XFHtg"
+      },
+      "bootstrap_liquidity": {
+        "base_amount": "7",
+        "quote_amount": "7",
+        "quoted_price": "1",
+        "quoted_price_unit": "USDC per SJBC"
+      }
+    }
+  ],
+  "token_mints": {
+    "stm": {
+      "mint": "9kued2JXgVk5dzvtipsTdXfBMWihy1E55TwMiXchCoAb",
+      "metadata_uri": "https://sterlingchain.net/token-assets/stm.metadata.json"
+    },
+    "sjbc": {
+      "mint": "EsNo61QodqHCRjkTGJDeqyK7N4Hunip5PaTYbpPZEsG2",
+      "metadata_uri": "https://sterlingchain.net/token-assets/sjbc.metadata.json"
+    },
+    "usdc": {
+      "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "official_identity_preserved": true
+    }
+  },
+  "canonical_live_pricing_pool": {
+    "pair_id": "STM-SJBCUSD",
+    "pool_id": "BbvR4zUAwZF8LmVFLXNpDy3CxuYcDwd5isoh7CZFAF5G",
+    "lp_mint": "G94nkBm4ntjiEHNzTpd7GRW9J8H5rqrhW83k5RSHZrBZ",
+    "legacy_fee_token_mint": "DnepvMafJZzDtDcevrqbMUCmDqdNhBLjCTUu1xhR4HeL",
+    "pair_metadata_uri": "https://sterlingchain.net/token-assets/stm-sjbcusd.pair.metadata.json",
+    "lp_metadata_uri": "https://sterlingchain.net/token-assets/stm-sjbcusd-g94-lp.metadata.json",
+    "display_logo_uri": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeicjvgitqvam4ez7rxvalhlcq5ox6354blyd55qh6leqybxia7alzm",
+    "quote_logo_uri": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeiboqchb4cq2pcx3zez6cv7gilmzpjmli2iuavsjfffdzayk57lwie",
+    "status": "active"
+  },
+  "legacy_pools_excluded": [
+    {
+      "pool_id": "Gg5HyswfFsEArr4z7ERfCAjDF8Ad853uguPLAUcZC4pX",
+      "reason": "legacy_pool_not_canonical_for_external_routing"
+    }
+  ],
+  "notes": [
+    "The new mainnet routing pools are STM/USDC and SJBC/USDC.",
+    "The canonical live pricing pool for STM/SJBC USD remains BbvR with LP mint G94; SDLP remains the legacy fee token path.",
+    "The legacy STM/USDC pool remains untouched and is excluded from canonical external routing.",
+    "Program upgrades were executed later to finalize debt ledgers and LP metadata on-chain."
+  ],
+  "generated_at": "2026-04-23T00:00:00Z"
+}

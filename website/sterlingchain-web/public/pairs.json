@@ -1,0 +1,114 @@
+{
+  "version": "1.0",
+  "type": "sterling_pairs_registry",
+  "network": "solana-mainnet-beta",
+  "project_name": "Sterling DEX",
+  "count": 3,
+  "pairs": [
+    {
+      "pair_id": "STM-USDC",
+      "slug": "stm-usdc",
+      "display_name": "Starling Mint / USDC",
+      "pair_symbol": "STM/USDC",
+      "base_asset": "STM",
+      "quote_asset": "USDC",
+      "program_id": "7v9sLrk92NNLLUfXLJw3o7MycZNvwsTK6kLWfWb8vcVA",
+      "pool_id": "DBZA9ZYg3MAZtc2Q5vxis4gQEL1RVgCfshDeEEwLUih5",
+      "lp_mint": "7DE91Pj9FnocsgXVqrHGRjzFt9zkNr3iRW9samdiyACr",
+      "pair_metadata_url": "https://sterlingchain.net/stm-usdc.pair.metadata.json",
+      "lp_metadata_url": "https://sterlingchain.net/token-assets/usdc-stm-lp.metadata.json",
+      "display_logo_uri": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeicjvgitqvam4ez7rxvalhlcq5ox6354blyd55qh6leqybxia7alzm",
+      "quote_logo_uri": "https://sterlingchain.net/token-assets/usdc.svg",
+      "base": {
+        "name": "Starling Mint",
+        "symbol": "STM",
+        "mint": "9kued2JXgVk5dzvtipsTdXfBMWihy1E55TwMiXchCoAb",
+        "decimals": 9,
+        "logo_uri": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeicjvgitqvam4ez7rxvalhlcq5ox6354blyd55qh6leqybxia7alzm"
+      },
+      "quote": {
+        "name": "USD Coin",
+        "symbol": "USDC",
+        "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "decimals": 6,
+        "logo_uri": "https://sterlingchain.net/token-assets/usdc.svg",
+        "official": true
+      },
+      "status": "active",
+      "canonical": true
+    },
+    {
+      "pair_id": "SJBC-USDC",
+      "slug": "sjbc-usdc",
+      "display_name": "SJBC USD / USDC",
+      "pair_symbol": "SJBC/USDC",
+      "base_asset": "SJBC",
+      "quote_asset": "USDC",
+      "program_id": "7v9sLrk92NNLLUfXLJw3o7MycZNvwsTK6kLWfWb8vcVA",
+      "pool_id": "9dBirT3kZvxREMNRn9E9hf5izWAkGCFkzGnTrFkKZYNe",
+      "lp_mint": "2rrGfPpcERwtoQ7UrTZp5HV3zvN5jf76WXERBHXG9oNL",
+      "pair_metadata_url": "https://sterlingchain.net/sjbc-usdc.pair.metadata.json",
+      "lp_metadata_url": "https://sterlingchain.net/token-assets/sjbc-usdc-lp.metadata.json",
+      "display_logo_uri": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeiboqchb4cq2pcx3zez6cv7gilmzpjmli2iuavsjfffdzayk57lwie",
+      "quote_logo_uri": "https://sterlingchain.net/token-assets/usdc.svg",
+      "base": {
+        "name": "SJBC USD",
+        "symbol": "SJBC",
+        "mint": "EsNo61QodqHCRjkTGJDeqyK7N4Hunip5PaTYbpPZEsG2",
+        "decimals": 9,
+        "logo_uri": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeiboqchb4cq2pcx3zez6cv7gilmzpjmli2iuavsjfffdzayk57lwie"
+      },
+      "quote": {
+        "name": "USD Coin",
+        "symbol": "USDC",
+        "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "decimals": 6,
+        "logo_uri": "https://sterlingchain.net/token-assets/usdc.svg",
+        "official": true
+      },
+      "status": "active",
+      "canonical": true
+    },
+    {
+      "pair_id": "STM-SJBCUSD",
+      "slug": "stm-sjbcusd",
+      "display_name": "Starling Mint / SJBC USD",
+      "pair_symbol": "STM/SJBCUSD",
+      "base_asset": "STM",
+      "quote_asset": "SJBC USD",
+      "program_id": "7v9sLrk92NNLLUfXLJw3o7MycZNvwsTK6kLWfWb8vcVA",
+      "pool_id": "BbvR4zUAwZF8LmVFLXNpDy3CxuYcDwd5isoh7CZFAF5G",
+      "lp_mint": "G94nkBm4ntjiEHNzTpd7GRW9J8H5rqrhW83k5RSHZrBZ",
+      "legacy_fee_token_mint": "DnepvMafJZzDtDcevrqbMUCmDqdNhBLjCTUu1xhR4HeL",
+      "pair_metadata_url": "https://sterlingchain.net/token-assets/stm-sjbcusd.pair.metadata.json",
+      "lp_metadata_url": "https://sterlingchain.net/token-assets/stm-sjbcusd-g94-lp.metadata.json",
+      "display_logo_uri": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeicjvgitqvam4ez7rxvalhlcq5ox6354blyd55qh6leqybxia7alzm",
+      "quote_logo_uri": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeiboqchb4cq2pcx3zez6cv7gilmzpjmli2iuavsjfffdzayk57lwie",
+      "base": {
+        "name": "Starling Mint",
+        "symbol": "STM",
+        "mint": "9kued2JXgVk5dzvtipsTdXfBMWihy1E55TwMiXchCoAb",
+        "decimals": 9,
+        "logo_uri": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeicjvgitqvam4ez7rxvalhlcq5ox6354blyd55qh6leqybxia7alzm"
+      },
+      "quote": {
+        "name": "SJBC USD",
+        "symbol": "SJBC",
+        "public_symbol": "SJBCUSD",
+        "mint": "EsNo61QodqHCRjkTGJDeqyK7N4Hunip5PaTYbpPZEsG2",
+        "decimals": 9,
+        "logo_uri": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeiboqchb4cq2pcx3zez6cv7gilmzpjmli2iuavsjfffdzayk57lwie"
+      },
+      "status": "active",
+      "canonical": true
+    }
+  ],
+  "legacy_pools_excluded": [
+    {
+      "pool_id": "Gg5HyswfFsEArr4z7ERfCAjDF8Ad853uguPLAUcZC4pX",
+      "pair_id": "STM-USDC",
+      "reason": "legacy_pool_not_canonical_for_external_routing"
+    }
+  ],
+  "generated_at": "2026-04-23T00:00:00Z"
+}

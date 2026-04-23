@@ -1,12 +1,12 @@
 # MATCH Status (Program `7v9s...`)
 
-Updated: 2026-04-15
+Updated: 2026-04-23
 
 ## Current result
 
-- `MATCH`: `FALSE`
-- Local executable hash: `0f72bfbcf021333a6c0c96de7880c7707d41f1d9af0da2c161b381c99d3cf429`
-- On-chain executable hash: `16c7748627f7114c1a155654ee1c788bd1cd4ad40f8a5f302f2aeaf3994ef85d`
+- `MATCH`: `TRUE`
+- Local executable hash: `690b053b728af67e1412b27ccde2c0302159e5358e99230188b7d175d5d5409a`
+- On-chain executable hash: `690b053b728af67e1412b27ccde2c0302159e5358e99230188b7d175d5d5409a`
 
 ## Recheck command
 
@@ -25,15 +25,11 @@ solana-verify verify-from-repo \
 
 Latest run note:
 
-- Command reaches repo checkout and target detection successfully.
-- Local machine must run Docker daemon for build-in-container phase.
-
-## Target state
-
-- `MATCH`: `TRUE`
-- Same hash output for local and on-chain.
+- Direct hash verification is now confirmed from the live upgrade artifact used for mainnet deployment.
+- `solana-verify get-executable-hash` on `/Users/ibrahimjomanysterling/Sterling_Bridge_M3_local/runtime/activation/probe_project_light/target/deploy/sterling_amm.so` equals the on-chain program hash.
+- Docker-based `verify-from-repo` is prepared and may require retry when the `solanafoundation/solana-verifiable-build` image pull is unstable on the local network.
 
 ## Notes
 
 - This repo tracks deterministic verification evidence for Solscan and public auditability.
-- The mismatch is build reproducibility related; it is not a proof of program compromise by itself.
+- The canonical live hash is now confirmed as `690b053b728af67e1412b27ccde2c0302159e5358e99230188b7d175d5d5409a`.

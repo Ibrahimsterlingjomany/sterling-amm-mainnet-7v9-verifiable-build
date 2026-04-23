@@ -19,7 +19,13 @@
     "category": "LP_TOKEN",
     "decimals": 9,
     "pool_id": "BbvR4zUAwZF8LmVFLXNpDy3CxuYcDwd5isoh7CZFAF5G",
+    "canonical_pool_live": true,
+    "canonical_pool_role": "live_pricing_pool",
+    "canonical_pool_display_name": "Starling Mint / SJBC USD",
+    "pair_id": "STM-SJBCUSD",
     "lp_pair": "STM/SJBCUSD",
+    "base_mint": "9kued2JXgVk5dzvtipsTdXfBMWihy1E55TwMiXchCoAb",
+    "quote_mint": "EsNo61QodqHCRjkTGJDeqyK7N4Hunip5PaTYbpPZEsG2",
     "website": "https://sterlingchain.net",
     "metadata_uri": "https://sterlingchain.net/token-assets/stm-sjbcusd-g94-lp.metadata.json",
     "pair_metadata_uri": "https://sterlingchain.net/token-assets/stm-sjbcusd.pair.metadata.json",
@@ -39,6 +45,7 @@
     "update_authority": "CMqD45Kq5oukPvaMDhzav5RxJqZb1xME1MmV71CzCeTw",
     "status": "active",
     "public_quote_label": "SJBC USD",
-    "legacy_fee_token_mint": "DnepvMafJZzDtDcevrqbMUCmDqdNhBLjCTUu1xhR4HeL"
+    "legacy_fee_token_mint": "DnepvMafJZzDtDcevrqbMUCmDqdNhBLjCTUu1xhR4HeL",
+    "legacy_fee_token_metadata_uri": "https://sterlingchain.net/token-assets/sdlp.metadata.json"
   }
 }

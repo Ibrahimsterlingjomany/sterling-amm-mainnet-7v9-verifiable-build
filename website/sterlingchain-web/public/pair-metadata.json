@@ -1,0 +1,72 @@
+{
+  "version": "1.0",
+  "type": "sterling_pair_metadata_catalog",
+  "network": "solana-mainnet-beta",
+  "project_name": "Sterling DEX",
+  "default_pair_id": "STM-USDC",
+  "count": 3,
+  "pairs": [
+    {
+      "pair_id": "STM-USDC",
+      "slug": "stm-usdc",
+      "display_name": "Starling Mint / USDC",
+      "pair_symbol": "STM/USDC",
+      "base_asset": "STM",
+      "quote_asset": "USDC",
+      "pool_id": "DBZA9ZYg3MAZtc2Q5vxis4gQEL1RVgCfshDeEEwLUih5",
+      "lp_mint": "7DE91Pj9FnocsgXVqrHGRjzFt9zkNr3iRW9samdiyACr",
+      "pair_metadata_url": "https://sterlingchain.net/stm-usdc.pair.metadata.json",
+      "lp_metadata_url": "https://sterlingchain.net/token-assets/usdc-stm-lp.metadata.json",
+      "display_logo_uri": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeicjvgitqvam4ez7rxvalhlcq5ox6354blyd55qh6leqybxia7alzm",
+      "quote_logo_uri": "https://sterlingchain.net/token-assets/usdc.svg",
+      "status": "active",
+      "canonical": true
+    },
+    {
+      "pair_id": "SJBC-USDC",
+      "slug": "sjbc-usdc",
+      "display_name": "SJBC USD / USDC",
+      "pair_symbol": "SJBC/USDC",
+      "base_asset": "SJBC",
+      "quote_asset": "USDC",
+      "pool_id": "9dBirT3kZvxREMNRn9E9hf5izWAkGCFkzGnTrFkKZYNe",
+      "lp_mint": "2rrGfPpcERwtoQ7UrTZp5HV3zvN5jf76WXERBHXG9oNL",
+      "pair_metadata_url": "https://sterlingchain.net/sjbc-usdc.pair.metadata.json",
+      "lp_metadata_url": "https://sterlingchain.net/token-assets/sjbc-usdc-lp.metadata.json",
+      "display_logo_uri": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeiboqchb4cq2pcx3zez6cv7gilmzpjmli2iuavsjfffdzayk57lwie",
+      "quote_logo_uri": "https://sterlingchain.net/token-assets/usdc.svg",
+      "status": "active",
+      "canonical": true
+    },
+    {
+      "pair_id": "STM-SJBCUSD",
+      "slug": "stm-sjbcusd",
+      "display_name": "Starling Mint / SJBC USD",
+      "pair_symbol": "STM/SJBCUSD",
+      "base_asset": "STM",
+      "quote_asset": "SJBC USD",
+      "pool_id": "BbvR4zUAwZF8LmVFLXNpDy3CxuYcDwd5isoh7CZFAF5G",
+      "lp_mint": "G94nkBm4ntjiEHNzTpd7GRW9J8H5rqrhW83k5RSHZrBZ",
+      "pair_metadata_url": "https://sterlingchain.net/token-assets/stm-sjbcusd.pair.metadata.json",
+      "lp_metadata_url": "https://sterlingchain.net/token-assets/stm-sjbcusd-g94-lp.metadata.json",
+      "display_logo_uri": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeicjvgitqvam4ez7rxvalhlcq5ox6354blyd55qh6leqybxia7alzm",
+      "quote_logo_uri": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeiboqchb4cq2pcx3zez6cv7gilmzpjmli2iuavsjfffdzayk57lwie",
+      "legacy_fee_token_mint": "DnepvMafJZzDtDcevrqbMUCmDqdNhBLjCTUu1xhR4HeL",
+      "status": "active",
+      "canonical": true
+    }
+  ],
+  "routes": {
+    "pairs": "https://sterlingchain.net/pairs",
+    "pools": "https://sterlingchain.net/pools",
+    "proof": "https://sterlingchain.net/proof.json"
+  },
+  "legacy_pools_excluded": [
+    {
+      "pool_id": "Gg5HyswfFsEArr4z7ERfCAjDF8Ad853uguPLAUcZC4pX",
+      "pair_id": "STM-USDC",
+      "reason": "legacy_pool_not_canonical_for_external_routing"
+    }
+  ],
+  "generated_at": "2026-04-23T00:00:00Z"
+}

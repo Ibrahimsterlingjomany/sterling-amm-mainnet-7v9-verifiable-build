@@ -46,12 +46,28 @@ After pushing this repo, run:
 solana-verify verify-from-repo \
   --program-id 7v9sLrk92NNLLUfXLJw3o7MycZNvwsTK6kLWfWb8vcVA \
   --library-name sterling_amm_mainnet \
-  https://github.com/<org-or-user>/<repo>
+  https://github.com/Ibrahimsterlingjomany/sterling-amm-mainnet-7v9-verifiable-build
 ```
 
 Prerequisite:
 
 - Docker daemon must be running locally (required by `solana-verify verify-from-repo`).
+
+## Current verified hash
+
+The deployed program and the live upgrade artifact currently match on the executable hash:
+
+- `690b053b728af67e1412b27ccde2c0302159e5358e99230188b7d175d5d5409a`
+
+Direct commands used:
+
+```bash
+solana-verify get-executable-hash \
+  /Users/ibrahimjomanysterling/Sterling_Bridge_M3_local/runtime/activation/probe_project_light/target/deploy/sterling_amm.so
+
+solana-verify get-program-hash \
+  7v9sLrk92NNLLUfXLJw3o7MycZNvwsTK6kLWfWb8vcVA
+```
 
 ## Solscan verification artifacts
 

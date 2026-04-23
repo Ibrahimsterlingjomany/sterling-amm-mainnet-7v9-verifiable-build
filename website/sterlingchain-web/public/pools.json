@@ -1,0 +1,87 @@
+{
+  "version": "1.0",
+  "type": "sterling_pools_registry",
+  "network": "solana-mainnet-beta",
+  "project_name": "Sterling DEX",
+  "count": 3,
+  "pools": [
+    {
+      "pool_id": "DBZA9ZYg3MAZtc2Q5vxis4gQEL1RVgCfshDeEEwLUih5",
+      "pair_id": "STM-USDC",
+      "display_name": "Starling Mint / USDC",
+      "base_asset": "STM",
+      "quote_asset": "USDC",
+      "lp_mint": "7DE91Pj9FnocsgXVqrHGRjzFt9zkNr3iRW9samdiyACr",
+      "lp_metadata_url": "https://sterlingchain.net/token-assets/usdc-stm-lp.metadata.json",
+      "display_logo_uri": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeicjvgitqvam4ez7rxvalhlcq5ox6354blyd55qh6leqybxia7alzm",
+      "quote_logo_uri": "https://sterlingchain.net/token-assets/usdc.svg",
+      "vaults": {
+        "base_vault": "GsDihMkDuTLdaEiYLEoZ9Wi3eUniMuyYopCmA6K6w8aS",
+        "quote_vault": "D4LN2c7fJ1X7NYVo5i3EQvURiYdyhvK79VNNw26cDc7Z"
+      },
+      "bootstrap_liquidity": {
+        "base_amount": "0.000108108",
+        "quote_amount": "10",
+        "quoted_price": "92500.0925",
+        "quoted_price_unit": "USDC per STM"
+      },
+      "status": "active",
+      "canonical": true
+    },
+    {
+      "pool_id": "9dBirT3kZvxREMNRn9E9hf5izWAkGCFkzGnTrFkKZYNe",
+      "pair_id": "SJBC-USDC",
+      "display_name": "SJBC USD / USDC",
+      "base_asset": "SJBC",
+      "quote_asset": "USDC",
+      "lp_mint": "2rrGfPpcERwtoQ7UrTZp5HV3zvN5jf76WXERBHXG9oNL",
+      "lp_metadata_url": "https://sterlingchain.net/token-assets/sjbc-usdc-lp.metadata.json",
+      "display_logo_uri": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeiboqchb4cq2pcx3zez6cv7gilmzpjmli2iuavsjfffdzayk57lwie",
+      "quote_logo_uri": "https://sterlingchain.net/token-assets/usdc.svg",
+      "vaults": {
+        "base_vault": "C3z2avjZkhbZxgi7gZ79ovrmTCp5J23y21nE1hNVZ7YP",
+        "quote_vault": "EHTADxJs5frCmL1we2iTqbYboiwUbRbN9wWshCo4AkuZ"
+      },
+      "bootstrap_liquidity": {
+        "base_amount": "7",
+        "quote_amount": "7",
+        "quoted_price": "1",
+        "quoted_price_unit": "USDC per SJBC"
+      },
+      "status": "active",
+      "canonical": true
+    },
+    {
+      "pool_id": "BbvR4zUAwZF8LmVFLXNpDy3CxuYcDwd5isoh7CZFAF5G",
+      "pair_id": "STM-SJBCUSD",
+      "display_name": "Starling Mint / SJBC USD",
+      "base_asset": "STM",
+      "quote_asset": "SJBC USD",
+      "lp_mint": "G94nkBm4ntjiEHNzTpd7GRW9J8H5rqrhW83k5RSHZrBZ",
+      "legacy_fee_token_mint": "DnepvMafJZzDtDcevrqbMUCmDqdNhBLjCTUu1xhR4HeL",
+      "lp_metadata_url": "https://sterlingchain.net/token-assets/stm-sjbcusd-g94-lp.metadata.json",
+      "display_logo_uri": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeicjvgitqvam4ez7rxvalhlcq5ox6354blyd55qh6leqybxia7alzm",
+      "quote_logo_uri": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeiboqchb4cq2pcx3zez6cv7gilmzpjmli2iuavsjfffdzayk57lwie",
+      "vaults": {
+        "base_vault": "3mRYBWgBKnQuUyvVDcYFqSeNoQTujTsFGra3GWLof9av",
+        "quote_vault": "5z4brtXmcDBhPKLk9YoiZE7fqaourBk26jBuAUHqZDN9"
+      },
+      "live_liquidity_snapshot": {
+        "base_amount": "10443.243243243",
+        "quote_amount": "966000000.000000000",
+        "quoted_price": "92500.00000000215",
+        "quoted_price_unit": "SJBC USD per STM"
+      },
+      "status": "active",
+      "canonical": true
+    }
+  ],
+  "legacy_pools_excluded": [
+    {
+      "pool_id": "Gg5HyswfFsEArr4z7ERfCAjDF8Ad853uguPLAUcZC4pX",
+      "pair_id": "STM-USDC",
+      "reason": "legacy_pool_not_canonical_for_external_routing"
+    }
+  ],
+  "generated_at": "2026-04-23T00:00:00Z"
+}
