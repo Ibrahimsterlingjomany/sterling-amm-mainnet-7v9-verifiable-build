@@ -1,5 +1,5 @@
-target/
-target.*/
+/target/
+/target.*/
 .anchor/
 .DS_Store
 *.log
