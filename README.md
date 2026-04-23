@@ -27,7 +27,7 @@ Current status is tracked in [`MATCH_STATUS.md`](./MATCH_STATUS.md).
 1. Build in verifiable mode:
 
 ```bash
-solana-verify build . --library-name sterling_amm_mainnet
+solana-verify build . --library-name sterling_amm
 ```
 
 2. Check local hash and on-chain hash in one command:
@@ -45,7 +45,7 @@ After pushing this repo, run:
 ```bash
 solana-verify verify-from-repo \
   --program-id 7v9sLrk92NNLLUfXLJw3o7MycZNvwsTK6kLWfWb8vcVA \
-  --library-name sterling_amm_mainnet \
+  --library-name sterling_amm \
   https://github.com/Ibrahimsterlingjomany/sterling-amm-mainnet-7v9-verifiable-build
 ```
 

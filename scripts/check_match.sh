@@ -2,7 +2,7 @@
 set -euo pipefail
 
 TARGET_PROGRAM_ID="${TARGET_PROGRAM_ID:-7v9sLrk92NNLLUfXLJw3o7MycZNvwsTK6kLWfWb8vcVA}"
-TARGET_SO_PATH="${TARGET_SO_PATH:-target/deploy/sterling_amm_mainnet.so}"
+TARGET_SO_PATH="${TARGET_SO_PATH:-target/deploy/sterling_amm.so}"
 
 if ! command -v solana-verify >/dev/null 2>&1; then
   echo "ERROR: solana-verify not found in PATH" >&2
