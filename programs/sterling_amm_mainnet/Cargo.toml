@@ -1,19 +1,25 @@
 [package]
-name = "sterling_amm_mainnet"
+name = "sterling_amm"
 version = "0.1.0"
 edition = "2021"
+publish = false
 
 [lib]
 crate-type = ["cdylib", "lib"]
-
-[dependencies]
-solana-program = "=1.14.17"
-anchor-lang = { version = "0.26.0", features = ["init-if-needed"] }
-anchor-spl = "0.26.0"
-borsh = "0.9.3"
-borsh-derive = "0.9.3"
-num_enum = "0.5.11"
-indexmap = "1.9.3"
+name = "sterling_amm"
 
 [features]
+custom-panic = []
+custom-heap = []
+anchor-debug = []
+migration = []
 no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+default = ["no-idl", "no-log-ix-name"]
+
+[dependencies]
+anchor-lang = { version = "0.29.0", features = ["init-if-needed"] }
+solana-security-txt = "1.1.1"
+anchor-spl = { version = "0.29.0", features = ["token"] }
