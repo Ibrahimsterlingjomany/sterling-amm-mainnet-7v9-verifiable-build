@@ -1,0 +1,46 @@
+{
+  "name": "SterlingDEX LP Token",
+  "symbol": "SDLP",
+  "description": "LP token canonique de la pool utile STM/SJBC sur SterlingDEX. Il reference la source interne de fees, claims et tickets exploites par SterlingChain.",
+  "image": "https://sterlingchain.net/token-assets/sdlp.jpg",
+  "external_url": "https://sterlingchain.net",
+  "properties": {
+    "category": "image",
+    "files": [
+      {
+        "uri": "https://sterlingchain.net/token-assets/sdlp.jpg",
+        "type": "image/jpeg"
+      }
+    ]
+  },
+  "extensions": {
+    "mint_address": "DnepvMafJZzDtDcevrqbMUCmDqdNhBLjCTUu1xhR4HeL",
+    "type": "SPL",
+    "category": "LP_TOKEN",
+    "decimals": 6,
+    "pool_id": "BbvR4zUAwZF8LmVFLXNpDy3CxuYcDwd5isoh7CZFAF5G",
+    "lp_pair": "STM/SJBC",
+    "legacy_fee_token": true,
+    "canonical_pool_live_lp_mint": "G94nkBm4ntjiEHNzTpd7GRW9J8H5rqrhW83k5RSHZrBZ",
+    "canonical_pool_live_lp_metadata_uri": "https://sterlingchain.net/token-assets/stm-sjbcusd-g94-lp.metadata.json",
+    "website": "https://sterlingchain.net",
+    "metadata_uri": "https://sterlingchain.net/token-assets/sdlp.metadata.json",
+    "pair_metadata_uri": "https://sterlingchain.net/pair-metadata.json",
+    "pair_metadata_profile_uri": "https://sterlingchain.net/.well-known/sterling-pair-metadata.json",
+    "pair_metadata_ipfs_uri": "ipfs://bafkreihy34j33smevvd5cawi76b52iik5in2kh3d6sz4wngapqtynhkvm4",
+    "mirrors": {
+      "canonical_metadata_uri": "https://sterlingchain.net/token-assets/sdlp.metadata.json",
+      "canonical_image_uri": "https://sterlingchain.net/token-assets/sdlp.jpg",
+      "ipfs_metadata_uri": "ipfs://bafkreihy34j33smevvd5cawi76b52iik5in2kh3d6sz4wngapqtynhkvm4",
+      "ipfs_metadata_gateway": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafkreihy34j33smevvd5cawi76b52iik5in2kh3d6sz4wngapqtynhkvm4",
+      "ipfs_image_uri": "ipfs://bafybeifh3p5nhvaici6xhlu2s5zuj3iol5vklwv5ujtjt6kajehb6falem",
+      "ipfs_image_gateway": "https://ipfs.io/ipfs/bafybeifh3p5nhvaici6xhlu2s5zuj3iol5vklwv5ujtjt6kajehb6falem",
+      "legacy_metadata_uri": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafkreifg5iounqgkqfe6r3t2aj6qpitaza2ofly42cci2o2vy3c2yjgiym",
+      "legacy_image_uri": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeifh3p5nhvaici6xhlu2s5zuj3iol5vklwv5ujtjt6kajehb6falem",
+      "integrity_manifest": "https://sterlingchain.net/.well-known/sterling-assets-integrity.json"
+    },
+    "authority": "CMqD45Kq5oukPvaMDhzav5RxJqZb1xME1MmV71CzCeTw",
+    "update_authority": "CMqD45Kq5oukPvaMDhzav5RxJqZb1xME1MmV71CzCeTw",
+    "status": "active"
+  }
+}

@@ -70,6 +70,14 @@ const TARGETS = [
     symbol: "SJBCUSDCLP",
     uri: "https://sterlingchain.net/token-assets/sjbc-usdc-lp.metadata.json",
   },
+  {
+    pairId: "STM-SJBCUSD",
+    pool: "BbvR4zUAwZF8LmVFLXNpDy3CxuYcDwd5isoh7CZFAF5G",
+    expectedLpMint: "G94nkBm4ntjiEHNzTpd7GRW9J8H5rqrhW83k5RSHZrBZ",
+    name: "Starling Mint / SJBC USD LP",
+    symbol: "STMSJBCLP",
+    uri: "https://sterlingchain.net/token-assets/stm-sjbcusd-g94-lp.metadata.json",
+  },
 ];
 
 function readIdl() {

@@ -1,0 +1,44 @@
+{
+  "name": "Starling Mint / SJBC USD LP",
+  "symbol": "STMSJBCLP",
+  "description": "LP token de pool pour la paire Starling Mint / SJBC USD sur Sterling DEX. Il expose la liquidite live de la pool STM/SJBC USD pour le wallet, le site et les indexeurs.",
+  "image": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeicjvgitqvam4ez7rxvalhlcq5ox6354blyd55qh6leqybxia7alzm",
+  "external_url": "https://sterlingchain.net",
+  "properties": {
+    "category": "image",
+    "files": [
+      {
+        "uri": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeicjvgitqvam4ez7rxvalhlcq5ox6354blyd55qh6leqybxia7alzm",
+        "type": "image/jpeg"
+      }
+    ]
+  },
+  "extensions": {
+    "mint_address": "G94nkBm4ntjiEHNzTpd7GRW9J8H5rqrhW83k5RSHZrBZ",
+    "type": "SPL",
+    "category": "LP_TOKEN",
+    "decimals": 9,
+    "pool_id": "BbvR4zUAwZF8LmVFLXNpDy3CxuYcDwd5isoh7CZFAF5G",
+    "lp_pair": "STM/SJBCUSD",
+    "website": "https://sterlingchain.net",
+    "metadata_uri": "https://sterlingchain.net/token-assets/stm-sjbcusd-g94-lp.metadata.json",
+    "pair_metadata_uri": "https://sterlingchain.net/token-assets/stm-sjbcusd.pair.metadata.json",
+    "pair_catalog_uri": "https://sterlingchain.net/pair-metadata.json",
+    "canonical_pair_view": "STM/SJBCUSD",
+    "canonical_pair_price_hint": "1 STM ~= 92500 SJBC USD",
+    "pool_photo_uri": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeicjvgitqvam4ez7rxvalhlcq5ox6354blyd55qh6leqybxia7alzm",
+    "quote_logo_uri": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeiboqchb4cq2pcx3zez6cv7gilmzpjmli2iuavsjfffdzayk57lwie",
+    "mirrors": {
+      "canonical_metadata_uri": "https://sterlingchain.net/token-assets/stm-sjbcusd-g94-lp.metadata.json",
+      "canonical_image_uri": "https://white-persistent-silkworm-971.mypinata.cloud/ipfs/bafybeicjvgitqvam4ez7rxvalhlcq5ox6354blyd55qh6leqybxia7alzm",
+      "ipfs_image_uri": "ipfs://bafybeicjvgitqvam4ez7rxvalhlcq5ox6354blyd55qh6leqybxia7alzm",
+      "ipfs_image_gateway": "https://ipfs.io/ipfs/bafybeicjvgitqvam4ez7rxvalhlcq5ox6354blyd55qh6leqybxia7alzm",
+      "integrity_manifest": "https://sterlingchain.net/.well-known/sterling-assets-integrity.json"
+    },
+    "authority": "CMqD45Kq5oukPvaMDhzav5RxJqZb1xME1MmV71CzCeTw",
+    "update_authority": "CMqD45Kq5oukPvaMDhzav5RxJqZb1xME1MmV71CzCeTw",
+    "status": "active",
+    "public_quote_label": "SJBC USD",
+    "legacy_fee_token_mint": "DnepvMafJZzDtDcevrqbMUCmDqdNhBLjCTUu1xhR4HeL"
+  }
+}
