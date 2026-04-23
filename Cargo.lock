@@ -442,14 +442,14 @@ dependencies = [
 
 [[package]]
 name = "blake3"
-version = "1.8.3"
+version = "1.5.5"
+source = "git+https://github.com/BLAKE3-team/BLAKE3?tag=1.5.5#81f772a4cd70dc0325047a6a737d2f6f4b92180e"
 dependencies = [
  "arrayref",
  "arrayvec",
  "cc",
  "cfg-if",
  "constant_time_eq",
- "cpufeatures",
  "digest 0.10.7",
 ]
 
@@ -712,7 +712,9 @@ dependencies = [
 
 [[package]]
 name = "constant_time_eq"
-version = "0.4.2"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c74b8349d32d297c9134b8c88677813a227df8f779daa29bfc29c183fe3dca6"
 
 [[package]]
 name = "cpufeatures"
