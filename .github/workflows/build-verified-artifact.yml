@@ -1,0 +1,49 @@
+name: Build Verified Artifact
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - artifact-build-015
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout workflow branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout exact source commit
+        run: git checkout cb6ed37fd9cd13fd62690babc5adad904eaa2d85
+
+      - name: Install Solana 1.18.26
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v1.18.26/install)"
+          echo "/home/runner/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+
+      - name: Build SBF program
+        run: cargo build-sbf --manifest-path programs/sterling_amm/Cargo.toml
+
+      - name: Prepare artifact branch
+        run: |
+          mkdir -p /tmp/sterling-artifact
+          cp target/deploy/sterling_amm.so /tmp/sterling-artifact/sterling_amm.so
+          sha256sum /tmp/sterling-artifact/sterling_amm.so > /tmp/sterling-artifact/sha256.txt
+          printf '%s\n' 'cb6ed37fd9cd13fd62690babc5adad904eaa2d85' > /tmp/sterling-artifact/source-commit.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch --orphan artifact-015-output
+          git rm -rf . >/dev/null 2>&1 || true
+          rm -rf .github programs tests migrations target Cargo.lock Cargo.toml Anchor.toml vendor .cargo
+          mkdir -p build
+          cp /tmp/sterling-artifact/sterling_amm.so build/sterling_amm.so
+          cp /tmp/sterling-artifact/sha256.txt build/sha256.txt
+          cp /tmp/sterling-artifact/source-commit.txt build/source-commit.txt
+          git add build
+          git commit -m "build artifact for cb6ed37"
+          git push -f origin HEAD:artifact-015-output
