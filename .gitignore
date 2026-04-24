@@ -1,5 +1,7 @@
 target/
 target.*/
+!vendor/*/src/target/
+!vendor/*/src/target/**
 .anchor/
 .DS_Store
 *.log
